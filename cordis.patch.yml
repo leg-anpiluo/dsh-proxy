@@ -1,0 +1,22 @@
+# @superfish058/dsh-llm-proxy v1.0.0 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
+#
+# v1.0.0 redesign (model-level intent):
+#   proxyHost      proxy hostname/IP (does not have to be this machine; default 127.0.0.1)
+#   proxyPort      proxy port (default 7897)
+#   proxiedModels  model keys that route through the proxy, `<providerId>/<modelId>`
+#                  (resolved against llm-pi-ai + llm-deepseek settings); everything
+#                  else stays DIRECT. Loopback hosts are always direct.
+#   retries        max retry attempts for failed requests (transport error / 429 / 5xx)
+#   retryIntervalMs delay between retries (ms)
+#
+# Edit values below, or use the 设置 → 模型代理 page (which also lists the selectable models).
+- insert:
+    - id: llm-proxy
+      name: '@superfish058/dsh-llm-proxy'
+      config:
+        proxyHost: '127.0.0.1'
+        proxyPort: 7897
+        # proxiedModels:
+        #   - 'deepseek-v4-flash/deepseek-v4-flash'   # b.ai provider
+        retries: 3
+        retryIntervalMs: 1000

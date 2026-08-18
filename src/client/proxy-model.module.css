@@ -1,0 +1,287 @@
+/* 模型代理 plugin card — header naming the plugin, disclosing the items in place. */
+
+.card {
+  list-style: none;
+  border: 1px solid var(--dsw-alias-border-l2, #d0d7de);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-3, #ffffff);
+  transition: border-color .16s, background .16s;
+}
+
+.card:hover {
+  border-color: var(--dsw-alias-label-dimmed, #8b949e);
+}
+
+/* An open card reads as the one being worked on, not merely taller. */
+.cardOpen {
+  background: var(--dsw-alias-bg-layer-2, #f6f8fa);
+  border-color: var(--dsw-alias-label-dimmed, #8b949e);
+}
+
+.header {
+  width: 100%;
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+}
+
+.header:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary, #4f8cff);
+  outline-offset: -2px;
+}
+
+/* Name over description: the description is what tells two plugins apart, so
+   it gets its own line rather than trailing the name. */
+.headText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.name {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-primary, #1f2329);
+}
+
+.description {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+}
+
+.chevron {
+  flex: none;
+  margin-left: 8px;
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+  font-size: 12px;
+  transition: transform .16s;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* The disclosed controls: fields + save/reset footer. */
+.body {
+  border-top: 1px solid var(--dsw-alias-border-l2, #d0d7de);
+  margin: 0 16px;
+  padding: 14px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.status {
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Two side-by-side fields (host+port, retries+interval). */
+.fieldRow {
+  display: flex;
+  gap: 10px;
+}
+
+.fieldRow > .field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.fieldLabel {
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.fieldHint {
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-line-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-base, #ffffff);
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+}
+
+.input:focus {
+  outline: 2px solid var(--dsw-alias-accent-default, #4f8cff);
+  outline-offset: -1px;
+}
+
+.textarea {
+  composes: input;
+  min-height: 56px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.rowList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The selected-model label inside a row. */
+.rowLabel {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+}
+
+/* The model-picker dropdown. */
+.select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-line-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-base, #ffffff);
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+}
+
+.select:focus {
+  outline: 2px solid var(--dsw-alias-accent-default, #4f8cff);
+  outline-offset: -1px;
+}
+
+.rowInput {
+  composes: input;
+  flex: 1 1 0;
+}
+
+.rowInputNarrow {
+  composes: input;
+  flex: 0 1 110px;
+}
+
+.rowRemove {
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid var(--dsw-alias-line-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-subtle, #f6f8fa);
+  color: var(--dsw-alias-label-secondary, #4b5563);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rowRemove:hover {
+  border-color: var(--dsw-alias-danger-default, #d1242f);
+  color: var(--dsw-alias-danger-default, #d1242f);
+}
+
+.rowAdd {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 1px dashed var(--dsw-alias-line-strong, #a6adb4);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #4b5563);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rowAdd:hover {
+  border-color: var(--dsw-alias-accent-default, #4f8cff);
+  color: var(--dsw-alias-accent-default, #4f8cff);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.primaryButton {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--dsw-alias-accent-default, #4f8cff);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.primaryButton:hover {
+  background: var(--dsw-alias-accent-strong, #3b76e0);
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ghostButton {
+  padding: 6px 12px;
+  border: 1px solid var(--dsw-alias-line-default, #d0d7de);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-subtle, #f6f8fa);
+  color: var(--dsw-alias-label-secondary, #4b5563);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ghostButton:hover {
+  border-color: var(--dsw-alias-line-strong, #a6adb4);
+}
+
+.saveStatus {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.saveStatusOk {
+  color: var(--dsw-alias-success-default, #1a7f37);
+}
+
+.saveStatusError {
+  color: var(--dsw-alias-danger-default, #d1242f);
+}
+
+.saveStatusHint {
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+}

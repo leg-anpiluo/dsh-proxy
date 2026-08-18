@@ -1,0 +1,358 @@
+/**
+ * dsh-llm-proxy v4 — host-side settings wiring + bridge tests.
+ *
+ * Covers: settings-namespace registration and live re-apply (watch), the
+ * fallback when no settings seam exists, the loopback-only bridge
+ * (describe/mutate/models envelopes, ns gating, revision conflicts,
+ * method/peer guards) and the model-list aggregation off the llm-pi-ai /
+ * llm-deepseek namespaces. No real network is touched.
+ */
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { SettingsConflictError } from '@deepseek-ai/dsh-settings'
+import { apply, Config, name, resolveProxyHosts } from '../lib/index.js'
+import {
+  LLM_PROXY_NAMESPACE,
+  SETTINGS_BRIDGE_PREFIX,
+  listModels,
+  makeBridgeHandlers,
+  makeBridgeRoutes,
+} from '../lib/settings.js'
+
+/** Deep-merge helper for the fake seam's composition resolution. */
+function merge(base, user) {
+  const out = { ...base }
+  for (const [key, value] of Object.entries(user ?? {})) {
+    if (value === undefined) delete out[key]
+    else if (typeof value === 'object' && value !== null && !Array.isArray(value) && typeof out[key] === 'object' && out[key] !== null) {
+      out[key] = { ...out[key], ...value }
+    } else out[key] = value
+  }
+  return out
+}
+
+/** A fake host settings seam with register/get/watch/describe/mutate. */
+function makeFakeSeam({ base = {}, conflict = false, writable = true, extraNamespaces = [] } = {}) {
+  const user = {}
+  let revision = 0
+  const watchers = new Set()
+  const registered = new Set()
+  const resolved = () => merge(base, user)
+  const descriptors = [
+    { ns: 'llm-proxy', schema: {}, value: resolved(), base, user: { ...user }, revision },
+    ...extraNamespaces,
+  ]
+  const seam = {
+    writable,
+    documentPath: 'fake-settings.yaml',
+    register(ns, schema, options) {
+      registered.add(String(ns))
+      return {
+        get: () => resolved(),
+        watch(callback) {
+          watchers.add(callback)
+          return () => watchers.delete(callback)
+        },
+        update() { throw new Error('not used') },
+        replace() { throw new Error('not used') },
+      }
+    },
+    describe({ redactSecrets }) {
+      assert.equal(redactSecrets, true)
+      return descriptors
+    },
+    async mutate(ns, ops, expectedRevision) {
+      assert.equal(String(ns), 'llm-proxy')
+      if (conflict) throw new SettingsConflictError('stale revision')
+      for (const op of ops) {
+        const [field] = op.path
+        if (op.op === 'set') user[field] = op.value
+        else delete user[field]
+      }
+      revision += 1
+      descriptors[0] = { ns: 'llm-proxy', schema: {}, value: resolved(), base, user: { ...user }, revision }
+      const next = resolved()
+      for (const callback of watchers) void callback(next)
+    },
+  }
+  return { seam, state: { user, revision, registered, watchers } }
+}
+
+/** Fake cordis ctx that resolves an inject([...]) callback synchronously. */
+function makeCtx({ seam, webServer = true }) {
+  const calls = []
+  const ctx = {
+    logger: {
+      info: (m) => calls.push(['info', m]),
+      warn: (m) => calls.push(['warn', m]),
+      error: (m) => calls.push(['error', m]),
+    },
+    on: (ev, fn) => calls.push(['on', ev, typeof fn]),
+    inject: typeof seam === 'function'
+      ? (services, callback) => {
+          assert.ok(Array.isArray(services) && services.includes('settings'), 'inject waits for settings')
+          const sctx = { effect: (cb) => calls.push(['effect', typeof cb]) }
+          for (const service of services) {
+            if (service === 'settings') sctx.settings = seam()
+            if (service === 'webServer' && webServer) {
+              sctx.webServer = { register: (route) => calls.push(['route', route.path]) }
+            }
+          }
+          callback(sctx)
+        }
+      : undefined,
+  }
+  return { ctx, calls }
+}
+
+/** A typical llm-pi-ai namespace view (b.ai-style provider + domestic provider). */
+const PI_AI_NAMESPACE = {
+  ns: 'llm-pi-ai',
+  schema: {},
+  value: {
+    providers: {
+      'deepseek-v4-flash': {
+        displayName: 'deepseek-v4-flash（B.AI）',
+        baseURL: 'https://api.b.ai/v1',
+        models: [{ id: 'deepseek-v4-flash' }],
+      },
+      xiaomi: {
+        displayName: 'xiaomi',
+        baseURL: 'https://api.xiaomimimo.com/v1',
+        models: [{ id: 'mimo-v2.5' }],
+      },
+    },
+  },
+  base: {},
+  user: {},
+  revision: 0,
+}
+
+const DEEPSEEK_NAMESPACE = {
+  ns: 'llm-deepseek',
+  schema: {},
+  value: {
+    baseURL: 'https://api.deepseek.com',
+    models: [{ id: 'deepseek-v4-flash' }, { id: 'deepseek-v4-pro' }],
+  },
+  base: {},
+  user: {},
+  revision: 0,
+}
+
+test('plugin exports name and Config schema', () => {
+  assert.equal(name, 'dsh-llm-proxy')
+  assert.equal(typeof Config, 'function')
+})
+
+test('Config defaults match the documented v4 shape', () => {
+  const cfg = Config({})
+  assert.equal(cfg.proxyHost, '127.0.0.1')
+  assert.equal(cfg.proxyPort, 7897)
+  assert.deepEqual(cfg.proxiedModels, [])
+  assert.equal(cfg.retries, 3)
+  assert.equal(cfg.retryIntervalMs, 1000)
+})
+
+test('apply registers the settings namespace and installs the dispatcher (live)', async () => {
+  const base = Config({ proxiedModels: ['deepseek-v4-flash/deepseek-v4-flash'] })
+  const { seam, state } = makeFakeSeam({ base, extraNamespaces: [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] })
+  const { ctx, calls } = makeCtx({ seam: () => seam })
+  await apply(ctx, base)
+  assert.ok(state.registered.has('llm-proxy'), 'namespace llm-proxy registered')
+  assert.ok(calls.some(([kind, msg]) => kind === 'info' && msg.includes('settings namespace "llm-proxy" registered')), 'registration logged')
+  const installLogs = calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher'))
+  assert.equal(installLogs.length, 1, 'initial install from resolved value')
+  assert.ok(installLogs[0][1].includes('api.b.ai'), 'install log shows the proxied host')
+  assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/describe`), 'describe route mounted')
+  assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/mutate`), 'mutate route mounted')
+  assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/models`), 'models route mounted')
+})
+
+test('watch re-applies the dispatcher on committed changes', async () => {
+  const base = Config({})
+  const { seam, state } = makeFakeSeam({ base, extraNamespaces: [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] })
+  const { ctx, calls } = makeCtx({ seam: () => seam })
+  await apply(ctx, base)
+  const before = calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher')).length
+  // Commit a change through the seam (as the bridge mutate would).
+  await seam.mutate(LLM_PROXY_NAMESPACE, [{ op: 'set', path: ['proxiedModels'], value: ['deepseek-v4-flash/deepseek-v4-flash'] }], undefined)
+  const after = calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher')).length
+  assert.equal(after, before + 1, 'one re-install per committed change')
+})
+
+test('apply falls back to patch config without a settings seam', async () => {
+  const { ctx, calls } = makeCtx({ seam: undefined })
+  const config = Config({ proxiedModels: [] })
+  await apply(ctx, config)
+  const installLogs = calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher'))
+  assert.equal(installLogs.length, 1, 'install happens')
+  assert.ok(calls.some(([kind, ev]) => kind === 'on' && ev === 'dispose'), 'dispose hook registered')
+})
+
+test('resolveProxyHosts maps selected model keys to baseURL hosts', () => {
+  const settings = { describe: () => [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] }
+  const hosts = resolveProxyHosts(settings, ['deepseek-v4-flash/deepseek-v4-flash'], undefined)
+  assert.deepEqual(hosts, ['api.b.ai'])
+})
+
+test('resolveProxyHosts ignores unknown keys and empty selections', () => {
+  const settings = { describe: () => [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] }
+  assert.deepEqual(resolveProxyHosts(settings, [], undefined), [])
+  assert.deepEqual(resolveProxyHosts(settings, ['nope/nope'], undefined), [])
+  assert.deepEqual(resolveProxyHosts(undefined, ['deepseek-v4-flash/deepseek-v4-flash'], undefined), [])
+})
+
+test('resolveProxyHosts handles the deepseek-official route', () => {
+  const settings = { describe: () => [DEEPSEEK_NAMESPACE] }
+  const hosts = resolveProxyHosts(settings, ['deepseek-official/deepseek-v4-flash'], undefined)
+  assert.deepEqual(hosts, ['api.deepseek.com'])
+})
+
+test('listModels aggregates llm-pi-ai and llm-deepseek models', () => {
+  const settings = { describe: () => [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] }
+  const rows = listModels(settings)
+  const keys = rows.map((r) => r.key).sort()
+  assert.deepEqual(keys, [
+    'deepseek-official/deepseek-v4-flash',
+    'deepseek-official/deepseek-v4-pro',
+    'deepseek-v4-flash/deepseek-v4-flash',
+    'xiaomi/mimo-v2.5',
+  ])
+  const bai = rows.find((r) => r.key === 'deepseek-v4-flash/deepseek-v4-flash')
+  assert.equal(bai.host, 'api.b.ai')
+  assert.equal(bai.name, 'deepseek-v4-flash')
+  assert.equal(bai.providerLabel.includes('B.AI'), true)
+})
+
+test('bridge describe serves the llm-proxy namespace view', async () => {
+  const base = Config({})
+  const { seam } = makeFakeSeam({ base })
+  const handlers = makeBridgeHandlers(seam)
+  const result = await handlers.describe()
+  assert.equal(result.ok, true)
+  assert.equal(result.value.writable, true)
+  assert.equal(result.value.namespaces.length, 1)
+  assert.equal(result.value.namespaces[0].ns, 'llm-proxy')
+  assert.equal(result.value.namespaces[0].value.proxyPort, 7897)
+})
+
+test('bridge mutate persists ops and returns the updated view', async () => {
+  const base = Config({})
+  const { seam, state } = makeFakeSeam({ base })
+  const handlers = makeBridgeHandlers(seam)
+  const result = await handlers.mutate({
+    ns: 'llm-proxy',
+    ops: [{ op: 'set', path: ['proxyPort'], value: 7898 }],
+  })
+  assert.equal(result.ok, true)
+  assert.equal(state.user.proxyPort, 7898)
+  assert.equal(result.value.value.proxyPort, 7898)
+  assert.equal(typeof result.value.revision, 'number')
+})
+
+test('bridge mutate refuses unknown namespaces', async () => {
+  const base = Config({})
+  const { seam } = makeFakeSeam({ base })
+  const handlers = makeBridgeHandlers(seam)
+  const result = await handlers.mutate({ ns: 'other-plugin', ops: [] })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'settings-rejected')
+})
+
+test('bridge mutate rejects malformed bodies', async () => {
+  const base = Config({})
+  const { seam } = makeFakeSeam({ base })
+  const handlers = makeBridgeHandlers(seam)
+  for (const body of [null, {}, { ns: 'llm-proxy' }, { ns: 'llm-proxy', ops: 'nope' }, { ns: 42, ops: [] }]) {
+    const result = await handlers.mutate(body)
+    assert.equal(result.ok, false, JSON.stringify(body))
+    assert.equal(result.code, 'settings-rejected')
+  }
+})
+
+test('bridge maps seam conflicts to settings-conflict', async () => {
+  const base = Config({})
+  const { seam } = makeFakeSeam({ base, conflict: true })
+  const handlers = makeBridgeHandlers(seam)
+  const result = await handlers.mutate({ ns: 'llm-proxy', ops: [{ op: 'set', path: ['proxyHost'], value: '10.0.0.1' }], expectedRevision: 1 })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'settings-conflict')
+})
+
+test('bridge routes enforce loopback + POST', async () => {
+  const base = Config({})
+  const { seam } = makeFakeSeam({ base })
+  const routes = makeBridgeRoutes(seam)
+  assert.equal(routes.length, 3)
+
+  function makeRes() {
+    return {
+      writeHead(status, headers) { this.status = status; this.headers = headers },
+      end(payload) { this.body = payload },
+    }
+  }
+
+  // Non-loopback peer → 403.
+  const res1 = makeRes()
+  await routes[0].handler(
+    { method: 'POST', headers: { host: '127.0.0.1:3080' }, socket: { remoteAddress: '192.168.1.5' } },
+    res1,
+  )
+  assert.equal(res1.status, 403)
+
+  // GET on a loopback peer → 405.
+  const res2 = makeRes()
+  await routes[0].handler(
+    { method: 'GET', headers: { host: 'localhost:3080' }, socket: { remoteAddress: '127.0.0.1' } },
+    res2,
+  )
+  assert.equal(res2.status, 405)
+
+  // Loopback + POST with an unreadable body → 400.
+  const res3 = makeRes()
+  await routes[1].handler(
+    { method: 'POST', headers: { host: '127.0.0.1:3080' }, socket: { remoteAddress: '127.0.0.1' }, [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }) },
+    res3,
+  )
+  assert.equal(res3.status, 400)
+
+  // Loopback + POST with a valid body → 200 with a result envelope.
+  const res4 = makeRes()
+  await routes[1].handler(
+    {
+      method: 'POST',
+      headers: { host: '127.0.0.1:3080' },
+      socket: { remoteAddress: '127.0.0.1' },
+      [Symbol.asyncIterator]: () => {
+        let done = false
+        return { next: async () => (done ? { done: true, value: undefined } : (done = true, { done: false, value: Buffer.from('{"ns":"llm-proxy","ops":[]}') })) }
+      },
+    },
+    res4,
+  )
+  assert.equal(res4.status, 200)
+  const envelope = JSON.parse(res4.body)
+  assert.equal(envelope.ok, true)
+  // The mutate handler returns the single namespace view, not a namespaces list.
+  assert.equal(envelope.value.ns, 'llm-proxy')
+
+  // models endpoint serves the aggregated list over loopback + POST.
+  const res5 = makeRes()
+  const seamWithModels = makeFakeSeam({ base, extraNamespaces: [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] }).seam
+  const routes2 = makeBridgeRoutes(seamWithModels)
+  await routes2[2].handler(
+    {
+      method: 'POST',
+      headers: { host: '127.0.0.1:3080' },
+      socket: { remoteAddress: '127.0.0.1' },
+      [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }),
+    },
+    res5,
+  )
+  assert.equal(res5.status, 200)
+  const modelEnvelope = JSON.parse(res5.body)
+  assert.equal(modelEnvelope.ok, true)
+  assert.ok(Array.isArray(modelEnvelope.value.models))
+  assert.ok(modelEnvelope.value.models.some((m) => m.key === 'deepseek-v4-flash/deepseek-v4-flash'))
+})

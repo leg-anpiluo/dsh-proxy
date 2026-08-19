@@ -1,7 +1,7 @@
 {
   "name": "@superfish058/dsh-llm-proxy",
-  "version": "1.0.0",
-  "description": "Model-level proxy routing + retry for DSH LLM requests, configurable live from the DSH 设置 page (模型代理). Selected models' baseURL hosts route through the configured proxy (proxyHost:proxyPort) while everything else stays direct, via a custom undici global dispatcher (RetryAgent over RoutingDispatcher); loopback is always direct.",
+  "version": "1.0.1",
+  "description": "DSH 模型代理插件：按模型走代理（Clash 等）+ 失败自动重试，设置页实时生效。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

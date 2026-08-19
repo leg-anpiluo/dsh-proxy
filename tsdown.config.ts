@@ -15,7 +15,7 @@ import { basename, dirname, resolve as resolvePath, sep } from 'node:path'
 import { transform } from 'lightningcss'
 import type { UserConfig } from 'tsdown'
 
-const ID = 'dsh-llm-proxy'
+const ID = '@superfish058/dsh-llm-proxy'
 
 /**
  * Browser platform modules the shell seeds into the frozen module table.

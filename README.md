@@ -1,5 +1,7 @@
 # @superfish058/dsh-llm-proxy
 
+[![npm](https://img.shields.io/npm/v/@superfish058/dsh-llm-proxy)](https://www.npmjs.com/package/@superfish058/dsh-llm-proxy)
+
 DSH 模型代理插件：给 LLM 请求按「目标域名」分流——选中的模型走代理，其余直连，失败自动重试。
 
 ## 它是干嘛的

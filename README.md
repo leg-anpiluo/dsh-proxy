@@ -23,14 +23,14 @@ DSH 模型代理插件：给 LLM 请求按「目标域名」分流——选中�
 ## 安装
 
 ```sh
-# 方式一：GitHub 发布产物（v1.0.1，含构建好的 lib，无需本地构建）
-dsh plugin --profile web add https://codeload.github.com/superfish058/dsh-llm-proxy/tar.gz/v1.0.1
+# 方式一：GitHub 发布产物（v1.0.1 tag，含构建好的 lib；pnpm 会解析为对应提交的 codeload tarball）
+dsh plugin --profile web add github:superfish058/dsh-llm-proxy#v1.0.1
 
 # 方式二：本地源码联调（改源码后需 npm run build 重建）
 dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 ```
 
-CLI 不接受 URL 时，把上面 URL 写进 `~/.dsh/profiles/web/package.json` 的 dependencies 后执行 `pnpm install`。装完重启 `dsh web`（托盘退出 → 启动）。
+若提示 build 授权，把 `@superfish058/dsh-llm-proxy` 加进 profile 的 `pnpm-workspace.yaml` → `onlyBuiltDependencies`。装完重启 `dsh web`（托盘退出 → 启动）。
 
 ## 配置
 

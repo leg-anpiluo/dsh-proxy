@@ -1,7 +1,16 @@
 {
   "name": "@superfish058/dsh-llm-proxy",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "DSH 模型代理插件：按模型走代理（Clash 等）+ 失败自动重试，设置页实时生效。",
+  "author": "superfish058",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/superfish058/dsh-llm-proxy.git"
+  },
+  "homepage": "https://github.com/superfish058/dsh-llm-proxy",
+  "bugs": {
+    "url": "https://github.com/superfish058/dsh-llm-proxy/issues"
+  },
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -43,6 +52,10 @@
     "web-ui"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=24"
   },

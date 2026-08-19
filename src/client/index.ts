@@ -60,10 +60,8 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('settings.plugin.item', function* () {
     yield ctx.slots.register({
       name: 'settings.plugin.item',
-      id: 'llm-proxy',
-      // After the shell's own cards (bash 0, agent-loop 10, web-search 20),
-      // before third-party cards (modlens 30).
-      order: 25,
+      key: 'llm-proxy',
+      // rc.7: keyed slots dispatch by namespace key (no list ordering).
       locale: NS,
       inject: injected,
     }, ProxyModelCard)

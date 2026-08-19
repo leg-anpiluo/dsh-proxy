@@ -15,7 +15,10 @@ test('client bundle is built and well-formed', () => {
   assert.ok(source.includes('window.__ModuleLoader__.load'), 'loader handoff present')
   assert.ok(source.includes('"@superfish058/dsh-llm-proxy"'), 'scoped bundle id stamped')
   assert.ok(source.includes('settings.plugin.item'), 'settings.plugin.item card registration present')
-  assert.ok(source.includes('"llm-proxy"') && source.includes('order: 25'), 'card id + order present')
+  // rc.7: the slot is keyed (namespace-dispatched), so the card registers with
+  // `key: 'llm-proxy'`; the rc.6 list-kind `id`/`order` form must be gone.
+  assert.ok(source.includes('"llm-proxy"'), 'card key present')
+  assert.ok(!source.includes('order: 25'), 'rc.6 list order option removed (keyed slot)')
   assert.ok(/exports\.apply\s*=/.test(source), 'apply exported')
   assert.ok(/exports\.inject\s*=/.test(source), 'inject exported')
 })

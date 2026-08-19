@@ -7,8 +7,8 @@
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   nav: '模型代理',
-  title: '模型代理',
-  description: '配置 DSH LLM 请求的代理端点、走代理的模型与失败重试（dsh-llm-proxy）。保存后立即生效，无需重启。',
+  title: '模型代理（dsh-llm-proxy）',
+  description: '选中的模型请求走代理并自动重试。',
   statusLoading: '加载中…',
   statusUnavailable: '设置服务不可用，无法读取或写入代理配置。',
   fieldProxyHost: '代理地址（proxyHost）',
@@ -38,8 +38,8 @@ export const zh = {
 /** English dictionary, checked complete against the zh key set. */
 export const en: Record<keyof typeof zh, string> = {
   nav: 'Proxy Model',
-  title: 'Proxy Model',
-  description: 'Configure the proxy endpoint, proxied models and retry policy for DSH LLM requests (dsh-llm-proxy). Changes apply immediately, no restart needed.',
+  title: 'Proxy Model (dsh-llm-proxy)',
+  description: 'Selected models route through the proxy with automatic retries.',
   statusLoading: 'Loading…',
   statusUnavailable: 'Settings service unavailable; the proxy configuration cannot be read or written.',
   fieldProxyHost: 'Proxy host (proxyHost)',

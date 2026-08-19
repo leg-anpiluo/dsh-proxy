@@ -6,7 +6,7 @@ DSH 模型代理插件：给 LLM 请求按「目标域名」分流——选中�
 
 - **按模型走代理**：在 DSH 设置页（插件 → 可配置插件 → 模型代理）勾选需要走代理的模型（如 `deepseek-v4-flash`），该模型的请求自动经 `proxyHost:proxyPort`（默认 `127.0.0.1:7897`，即 Clash）转发；未勾选的模型（DeepSeek、小米、通义等国内 API）保持直连。
 - **失败自动重试**：对断连（ECONNRESET 等）、HTTP 429 限流、5xx 错误自动重试（默认 3 次、间隔 1s），减少免费额度被瞬时错误打断。
-- **保存即生效，无需重启**：设置写入 `llm-proxy` 命名空间后运行时整体替换 dispatcher，不碰 `settings.yaml` 里的供应商配置。
+- **保存即生效，无需重启**：设置写入 `llm-proxy` 命名空间后运行时整体替换 dispatcher，不碰 `settings.yaml` 里的供应商配置。冷启动时若 provider 命名空间（`llm-pi-ai`/`llm-deepseek`）尚未注册，插件会带退避重试直到可解析代理域名，不再需要手动"恢复默认再保存"。
 
 ## 用什么技术
 

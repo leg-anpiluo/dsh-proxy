@@ -13,7 +13,7 @@ test('client bundle is built and well-formed', () => {
   assert.ok(existsSync(path), 'lib/client.js missing — run `npm run build` first')
   const source = readFileSync(path, 'utf8')
   assert.ok(source.includes('window.__ModuleLoader__.load'), 'loader handoff present')
-  assert.ok(source.includes('"dsh-llm-proxy"'), 'bundle id stamped')
+  assert.ok(source.includes('"@superfish058/dsh-llm-proxy"'), 'scoped bundle id stamped')
   assert.ok(source.includes('settings.plugin.item'), 'settings.plugin.item card registration present')
   assert.ok(source.includes('"llm-proxy"') && source.includes('order: 25'), 'card id + order present')
   assert.ok(/exports\.apply\s*=/.test(source), 'apply exported')

@@ -64,9 +64,7 @@
 
 .chevron {
   flex: none;
-  margin-left: 8px;
   color: var(--dsw-alias-label-tertiary, #6b7280);
-  font-size: 12px;
   transition: transform .16s;
 }
 

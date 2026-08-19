@@ -13,6 +13,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls the ui-settings-plugins SlotMap merge (the
 // 'settings.plugin.item' entry the configurable tab declares at runtime).
@@ -436,7 +437,7 @@ export function ProxyModelCard(props: ProxyModelCardProps): ReactNode {
           <span className={styles.name}>{t('title')}</span>
           <span className={styles.description}>{t('description')}</span>
         </span>
-        <span className={styles.chevron}>{open ? '▾' : '▸'}</span>
+        <IconChevronDownOutline14 className={styles.chevron + (open ? ` ${styles.chevronOpen}` : '')} />
       </button>
       {open && <CardBody scope={scope} useSnapshot={useSnapshot} t={t} />}
     </li>

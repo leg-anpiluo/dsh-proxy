@@ -18,6 +18,7 @@ import {
   makeBridgeHandlers,
   makeBridgeRoutes,
 } from '../lib/settings.js'
+import { __resetCatalogForTest, __setCatalogForTest } from '../lib/catalog.js'
 
 /** Deep-merge helper for the fake seam's composition resolution. */
 function merge(base, user) {
@@ -355,4 +356,100 @@ test('bridge routes enforce loopback + POST', async () => {
   assert.equal(modelEnvelope.ok, true)
   assert.ok(Array.isArray(modelEnvelope.value.models))
   assert.ok(modelEnvelope.value.models.some((m) => m.key === 'deepseek-v4-flash/deepseek-v4-flash'))
+})
+
+// --- pi-ai catalog fallback (providers without explicit models) ------------
+
+/** A fake catalog matching the pi-ai built-in MiMo set (id/name/baseUrl). */
+function fakeXiaomiCatalog() {
+  return {
+    xiaomi: [
+      { id: 'mimo-v2-flash', name: 'MiMo-V2-Flash', baseUrl: 'https://api.xiaomimimo.com/v1' },
+      { id: 'mimo-v2-omni', name: 'MiMo-V2-Omni', baseUrl: 'https://api.xiaomimimo.com/v1' },
+      { id: 'mimo-v2-pro', name: 'MiMo-V2-Pro', baseUrl: 'https://api.xiaomimimo.com/v1' },
+      { id: 'mimo-v2.5', name: 'MiMo-V2.5', baseUrl: 'https://api.xiaomimimo.com/v1' },
+      { id: 'mimo-v2.5-pro', name: 'MiMo-V2.5-Pro', baseUrl: 'https://api.xiaomimimo.com/v1' },
+      { id: 'mimo-v2.5-pro-ultraspeed', name: 'MiMo-V2.5-Pro-UltraSpeed', baseUrl: 'https://api.xiaomimimo.com/v1' },
+    ],
+  }
+}
+
+/** llm-pi-ai view whose xiaomi provider declares only an apiKeyEnv. */
+function xiaomiBareNamespace() {
+  return {
+    ns: 'llm-pi-ai',
+    schema: {},
+    value: { providers: { xiaomi: { apiKeyEnv: 'XIAOMI_API_KEY' } } },
+    base: {},
+    user: {},
+    revision: 0,
+  }
+}
+
+test('listModels falls back to the pi-ai catalog for providers without explicit models', () => {
+  __setCatalogForTest((providerId) => fakeXiaomiCatalog()[providerId] ?? [])
+  try {
+    const settings = { describe: () => [xiaomiBareNamespace()] }
+    const rows = listModels(settings)
+    const keys = rows.map((r) => r.key).sort()
+    assert.deepEqual(keys, [
+      'xiaomi/mimo-v2-flash',
+      'xiaomi/mimo-v2-omni',
+      'xiaomi/mimo-v2-pro',
+      'xiaomi/mimo-v2.5',
+      'xiaomi/mimo-v2.5-pro',
+      'xiaomi/mimo-v2.5-pro-ultraspeed',
+    ])
+    const first = rows.find((r) => r.key === 'xiaomi/mimo-v2-flash')
+    assert.equal(first.modelId, 'mimo-v2-flash')
+    assert.equal(first.name, 'MiMo-V2-Flash')
+    assert.equal(first.providerLabel, 'xiaomi')
+    // The catalog entry carries the baseURL (the profile has none).
+    assert.equal(first.host, 'api.xiaomimimo.com')
+  } finally {
+    __resetCatalogForTest()
+  }
+})
+
+test('listModels keeps the single placeholder row when the catalog is unavailable', () => {
+  __setCatalogForTest(null) // simulates pi-ai not installed / import failure
+  try {
+    const settings = { describe: () => [xiaomiBareNamespace()] }
+    const rows = listModels(settings)
+    assert.deepEqual(rows.map((r) => r.key), ['xiaomi'])
+    assert.equal(rows[0].modelId, '')
+  } finally {
+    __resetCatalogForTest()
+  }
+})
+
+test('listModels catalog fallback prefers explicit models when present', () => {
+  __setCatalogForTest((providerId) => fakeXiaomiCatalog()[providerId] ?? [])
+  try {
+    const ns = xiaomiBareNamespace()
+    ns.value.providers.xiaomi = {
+      apiKeyEnv: 'XIAOMI_API_KEY',
+      baseURL: 'https://api.xiaomimimo.com/v1',
+      models: [{ id: 'mimo-v2.5' }],
+    }
+    const rows = listModels({ describe: () => [ns] })
+    assert.deepEqual(rows.map((r) => r.key), ['xiaomi/mimo-v2.5'])
+    assert.equal(rows[0].name, 'mimo-v2.5')
+  } finally {
+    __resetCatalogForTest()
+  }
+})
+
+test('resolveProxyHosts matches catalog-backed models without explicit models', () => {
+  __setCatalogForTest((providerId) => fakeXiaomiCatalog()[providerId] ?? [])
+  try {
+    const settings = { describe: () => [xiaomiBareNamespace()] }
+    // Catalog-backed model key resolves the host from the catalog baseURL.
+    const hosts = resolveProxyHosts(settings, ['xiaomi/mimo-v2.5'], undefined)
+    assert.deepEqual(hosts, ['api.xiaomimimo.com'])
+    // Unknown catalog model stays unmatched.
+    assert.deepEqual(resolveProxyHosts(settings, ['xiaomi/not-a-model'], undefined), [])
+  } finally {
+    __resetCatalogForTest()
+  }
 })

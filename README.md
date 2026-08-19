@@ -6,6 +6,8 @@ DSH 模型代理插件：给 LLM 请求按「目标域名」分流——选中�
 
 - **按模型走代理**：在 DSH 设置页（插件 → 可配置插件 → 模型代理）勾选需要走代理的模型（如 `deepseek-v4-flash`），该模型的请求自动经 `proxyHost:proxyPort`（默认 `127.0.0.1:7897`，即 Clash）转发；未勾选的模型（DeepSeek、小米、通义等国内 API）保持直连。
 - **失败自动重试**：对断连（ECONNRESET 等）、HTTP 429 限流、5xx 错误自动重试（默认 3 次、间隔 1s），减少免费额度被瞬时错误打断。
+- **模型列表与官方一致（v1.0.3）**：只配了 `apiKeyEnv`、没写 `models` 的 provider（如 `xiaomi`），其模型从 pi-ai 内置目录（`@earendil-works/pi-ai`）回退补齐，勾选列表与 DSH 官方模型选择器完全同步；目录更新（`npm update` 后）自动跟随，无需手改配置。
+- **retryPolicy 镜像（v1.0.3）**：卡片上的 `retries`/`retryIntervalMs` 会镜像进被勾选 provider 的官方 `retryPolicy`（驱动设置页可见的 `(retry/maximum)` 提示），取消勾选自动还原官方默认值——一套配置同时驱动传输层重试与官方重试 UI。
 - **保存即生效，无需重启**：设置写入 `llm-proxy` 命名空间后运行时整体替换 dispatcher，不碰 `settings.yaml` 里的供应商配置。冷启动时若 provider 命名空间（`llm-pi-ai`/`llm-deepseek`）尚未注册，插件会带退避重试直到可解析代理域名，不再需要手动"恢复默认再保存"。
 
 ## 用什么技术
@@ -23,8 +25,8 @@ DSH 模型代理插件：给 LLM 请求按「目标域名」分流——选中�
 ## 安装
 
 ```sh
-# 方式一：GitHub 发布产物（v1.0.1 tag，含构建好的 lib；pnpm 会解析为对应提交的 codeload tarball）
-dsh plugin --profile web add github:superfish058/dsh-llm-proxy#v1.0.1
+# 方式一：GitHub 发布产物（v1.0.3 tag，含构建好的 lib；pnpm 会解析为对应提交的 codeload tarball）
+dsh plugin --profile web add github:superfish058/dsh-llm-proxy#v1.0.3
 
 # 方式二：本地源码联调（改源码后需 npm run build 重建）
 dsh plugin --profile web add C:/path/to/dsh-llm-proxy

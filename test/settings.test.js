@@ -58,8 +58,8 @@ function makeFakeSeam({ base = {}, conflict = false, writable = true, extraNames
         replace() { throw new Error('not used') },
       }
     },
-    describe({ redactSecrets }) {
-      assert.equal(redactSecrets, true)
+    describe({ redactSecrets } = {}) {
+      assert.ok(redactSecrets === true || redactSecrets === undefined, 'describe options must be redact or absent')
       return descriptors
     },
     async mutate(ns, ops, expectedRevision) {
@@ -168,6 +168,7 @@ test('apply registers the settings namespace and installs the dispatcher (live)'
   assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/describe`), 'describe route mounted')
   assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/mutate`), 'mutate route mounted')
   assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/models`), 'models route mounted')
+  assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/test`), 'test route mounted')
 })
 
 test('watch re-applies the dispatcher on committed changes', async () => {
@@ -285,7 +286,8 @@ test('bridge routes enforce loopback + POST', async () => {
   const base = Config({})
   const { seam } = makeFakeSeam({ base })
   const routes = makeBridgeRoutes(seam)
-  assert.equal(routes.length, 3)
+  assert.equal(routes.length, 4)
+  assert.equal(routes[3].path, SETTINGS_BRIDGE_PREFIX + '/test')
 
   function makeRes() {
     return {

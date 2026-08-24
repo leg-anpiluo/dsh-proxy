@@ -52,6 +52,18 @@ export interface ProxyModelRow {
   inputModalities: string[]
 }
 
+/** One connection-test outcome (host bridge `/test`). */
+export interface TestResult {
+  key: string
+  ok: boolean
+  status?: number
+  latencyMs?: number
+  viaProxy?: boolean
+  multimodal?: boolean
+  code?: string
+  message?: string
+}
+
 /** The scope face the proxy-model section consumes. */
 export interface ProxyModelScope {
   getSnapshot(): ProxyModelSnapshot
@@ -62,6 +74,8 @@ export interface ProxyModelScope {
   mutate(fields: FieldWrite[]): Promise<{ ok: boolean; code?: string; message?: string }>
   /** Fetch the selectable model list from the host bridge. */
   listModels(): Promise<ProxyModelRow[]>
+  /** Probe one model key from the host (rides the proxy routing + retry). */
+  test(key: string): Promise<TestResult>
   /** Stop queued operations and wait for the current call to settle. */
   dispose(): Promise<void>
 }
@@ -121,6 +135,13 @@ function createBridgeApi(fetchFn: typeof fetch) {
       if (!Array.isArray(value.models)) return []
       return value.models.filter(isModelRow)
     },
+    test: async (key: string): Promise<TestResult> => {
+      const result = await post('/test', { key })
+      if (!result.ok || typeof result.value !== 'object' || result.value === null) {
+        return { key, ok: false, code: result.code ?? 'internal', message: result.message ?? 'test failed' }
+      }
+      return result.value as TestResult
+    },
   }
 }
 
@@ -177,6 +198,10 @@ class BridgeScopeController implements ProxyModelScope {
 
   listModels() {
     return this.api.models()
+  }
+
+  test(key: string) {
+    return this.enqueue(() => this.api.test(key))
   }
 
   async dispose() {
@@ -360,6 +385,7 @@ function createCompatScope(primary: OfficialScopeFace, fetchFn: typeof fetch): P
       await fallback.load()
     },
     listModels: () => fallback.listModels(),
+    test: (key: string) => fallback.test(key),
     mutate: async (fields) => {
       const backend = active()
       if (backend === fallback) {

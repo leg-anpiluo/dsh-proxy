@@ -307,3 +307,53 @@
 .saveStatusHint {
   color: var(--dsw-alias-label-tertiary, #6b7280);
 }
+
+/* Small-print hint under the proxied-model list: the Test button explanation
+   (the host routes per model, and the test rides the saved/live routing). */
+.testBarHint {
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Connection-test button + per-model result line (走代理的模型 rows). */
+.rowWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rowTest {
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid var(--dsw-alias-border-l2, #d0d7de);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2, #f6f8fa);
+  color: var(--dsw-alias-label-secondary, #4b5563);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rowTest:hover {
+  border-color: var(--dsw-alias-state-business-primary, #4f8cff);
+  color: var(--dsw-alias-state-business-primary, #4f8cff);
+}
+
+.rowTest:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.testResult {
+  font-size: 12px;
+  line-height: 1.4;
+  padding-left: 2px;
+}
+
+.testResultOk {
+  color: var(--dsw-alias-state-success-primary, #1a7f37);
+}
+
+.testResultError {
+  color: var(--dsw-alias-state-error-primary, #d1242f);
+}

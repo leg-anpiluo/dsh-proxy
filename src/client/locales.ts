@@ -16,7 +16,7 @@ export const zh = {
   fieldProxyPort: '代理端口（proxyPort）',
   fieldProxyPortHint: '代理服务端口（1–65535）。',
   fieldProxiedModels: '走代理的模型（proxiedModels）',
-  fieldProxiedModelsHint: '从已配置模型中选择需要走代理的；未选中的模型全部直连。',
+  fieldProxiedModelsHint: '按 API 地址走代理：选中一个模型会将该地址下的所有模型都路由到代理。',
   fieldRetries: '重试次数（retries）',
   fieldRetriesHint: '请求失败（网络错误 / 429 / 5xx）时的最大重试次数（0–10）。',
   fieldRetryIntervalMs: '重试间隔（retryIntervalMs）',
@@ -33,8 +33,16 @@ export const zh = {
   expand: '展开',
   collapse: '收起',
   fieldMultimodalModels: '多模态模型（multimodalModels）',
-  fieldMultimodalModelsHint: '勾选后，该模型会在所属 provider 的声明中写入 image（支持图片输入），DSH 不再拒绝向它发送图片；取消勾选自动还原官方默认。',
+  fieldMultimodalModelsHint: '勾选后模型声明支持图片输入，DSH 不再拒绝发图；取消勾选自动还原。',
   multimodalBadge: '🖼 多模态',
+  test: '测试连接',
+  testing: '测试中…',
+  testOk: '连接成功',
+  testFail: '连接失败',
+  testViaProxy: '经代理',
+  testDirect: '直连',
+  testMultimodalOn: '多模态已开启',
+  testBarHint: '「测试连接」走已保存的配置，改代理勾选后请先保存再测试。',
 }
 
 /** English dictionary, checked complete against the zh key set. */
@@ -49,7 +57,7 @@ export const en: Record<keyof typeof zh, string> = {
   fieldProxyPort: 'Proxy port (proxyPort)',
   fieldProxyPortHint: 'Proxy service port (1–65535).',
   fieldProxiedModels: 'Proxied models (proxiedModels)',
-  fieldProxiedModelsHint: 'Pick the models that route through the proxy; unselected models stay direct.',
+  fieldProxiedModelsHint: 'Proxy routing is per API base URL: selecting one model also routes all models sharing that host.',
   fieldRetries: 'Retries (retries)',
   fieldRetriesHint: 'Max retry attempts on failure (network error / 429 / 5xx), 0–10.',
   fieldRetryIntervalMs: 'Retry interval (retryIntervalMs)',
@@ -66,8 +74,16 @@ export const en: Record<keyof typeof zh, string> = {
   expand: 'Expand',
   collapse: 'Collapse',
   fieldMultimodalModels: 'Multimodal models (multimodalModels)',
-  fieldMultimodalModelsHint: 'When checked, image is written into the model\u2019s declaration in its owning provider (advertised as accepting image input), so DSH no longer refuses image requests to it; unchecking restores the official defaults.',
+  fieldMultimodalModelsHint: 'Checked models are advertised as accepting image input; unchecking restores the official defaults.',
   multimodalBadge: '🖼 Multimodal',
+  test: 'Test',
+  testing: 'Testing…',
+  testOk: 'Connected',
+  testFail: 'Failed',
+  testViaProxy: 'via proxy',
+  testDirect: 'direct',
+  testMultimodalOn: 'multimodal on',
+  testBarHint: 'Test uses the saved routing; save before testing a newly proxied model.',
 }
 
 export type ProxyKey = keyof typeof zh

@@ -19,7 +19,7 @@ import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // 'settings.plugin.item' entry the configurable tab declares at runtime).
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type {
-  FieldWrite, ProxyModelRow, ProxyModelScope, ProxyModelSnapshot,
+  FieldWrite, ProxyModelRow, ProxyModelScope, ProxyModelSnapshot, TestResult,
 } from './settings-scope.ts'
 import type { en } from './locales.ts'
 import styles from './proxy-model.module.css'
@@ -198,6 +198,8 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
   const hydratedRef = useRef(false)
   const [models, setModels] = useState<ProxyModelRow[]>([])
   const [modelsError, setModelsError] = useState<string | null>(null)
+  const [testingKey, setTestingKey] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
 
   // Hydrate the form once from the first ready snapshot.
   useEffect(() => {
@@ -283,6 +285,26 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
     setForm({ ...form, multimodalModels: selected })
   }
 
+  const handleTest = async (key: string): Promise<void> => {
+    setTestingKey(key)
+    const result = await scope.test(key)
+    setTestResults((previous) => ({ ...previous, [key]: result }))
+    setTestingKey(null)
+  }
+
+  /** One-line test detail: ✓ 连接成功 · 200 · 38ms · 经代理 · 多模态已开启 / ✗ 连接失败：… */
+  const formatTestDetail = (result: TestResult): string => {
+    if (result.ok) {
+      const parts: string[] = []
+      if (typeof result.status === 'number') parts.push(String(result.status))
+      if (typeof result.latencyMs === 'number') parts.push(`${result.latencyMs}ms`)
+      parts.push(result.viaProxy ? t('testViaProxy') : t('testDirect'))
+      if (result.multimodal) parts.push(t('testMultimodalOn'))
+      return parts.length > 0 ? ` · ${parts.join(' · ')}` : ''
+    }
+    return `：${result.message ?? result.code ?? t('testFail')}`
+  }
+
   /** Display label for a model row: `[厂商] 模型名`; the vendor prefix is
    * dropped when the model name already carries it (e.g. B.AI names are
    * already "deepseek-v4-flash（B.AI）", so the bracketed prefix would just
@@ -339,17 +361,37 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
               <ul className={styles.rowList}>
                 {form.proxiedModels.map((key) => {
                   const row = models.find((m) => m.key === key)
+                  const result = testResults[key]
                   return (
-                    <li key={key} className={styles.row}>
-                      <span className={styles.rowLabel}>{row ? rowLabel(row) : key}</span>
-                      <button
-                        type="button"
-                        className={styles.rowRemove}
-                        data-testid="remove-proxied-model"
-                        onClick={() => toggleModel(key)}
-                      >
-                        {t('remove')}
-                      </button>
+                    <li key={key} className={styles.rowWrap}>
+                      <div className={styles.row}>
+                        <span className={styles.rowLabel}>{row ? rowLabel(row) : key}</span>
+                        <button
+                          type="button"
+                          className={styles.rowTest}
+                          data-testid="test-proxied-model"
+                          disabled={testingKey !== null}
+                          onClick={() => { void handleTest(key) }}
+                        >
+                          {testingKey === key ? t('testing') : t('test')}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.rowRemove}
+                          data-testid="remove-proxied-model"
+                          onClick={() => toggleModel(key)}
+                        >
+                          {t('remove')}
+                        </button>
+                      </div>
+                      {result !== undefined && (
+                        <span
+                          className={`${styles.testResult} ${result.ok ? styles.testResultOk : styles.testResultError}`}
+                          data-testid="test-proxied-result"
+                        >
+                          {result.ok ? '✓ ' : '✗ '}{result.ok ? t('testOk') : t('testFail')}{formatTestDetail(result)}
+                        </span>
+                      )}
                     </li>
                   )
                 })}
@@ -369,6 +411,9 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
             <option key={row.key} value={row.key}>{rowLabel(row)}</option>
           ))}
         </select>
+        {form.proxiedModels.length > 0 && (
+          <span className={styles.testBarHint}>{t('testBarHint')}</span>
+        )}
       </div>
 
       <div className={styles.field}>

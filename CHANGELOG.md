@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.1.0 (2026-08-24)
+
+- **测试连接**：走代理的模型列表每行新增「测试连接」按钮。宿主侧新增 loopback 桥接端点 `POST /api/dsh-llm-proxy/settings/test`，对被勾选模型发一个最小 `chat/completions` 探测请求（走插件自己的全局 dispatcher，即真实代理路径），返回 HTTP 状态 / 耗时 / 是否经代理 / 多模态是否开启；网络超时、认证失败、限流、服务端错误都有明确提示（`lib/connection-test.js`）。
+- 凭据不出宿主机：探测请求的 `Authorization` 头在宿主侧组装，卡片只收到结构化结果字段。
+- 客户端卡片每行显示 ✓ 连接成功（状态 · 耗时 · 经代理/直连 · 多模态）或 ✗ 连接失败（原因），新增 zh/en 文案与样式。
+- **测试连接可靠性修复**：
+  - `findTestTarget` 改为基于 `listModels` 匹配，设置卡 UI 能勾选的模型测试必然可解析；`llm-deepseek` 为空文档（`llm-deepseek: {}`）时回退官方内置目录（默认 `https://api.deepseek.com` + `DEEPSEEK_API_KEY`），官方 DeepSeek 模型不再报「未找到模型」。
+  - 测试失败时读取并脱敏显示提供方响应 body（截断 2KB），HTTP 400/401/… 直接给出真实原因而不是只有状态码。
+  - 探测请求 `max_tokens` 从 1 调整为 8：B.AI 等提供方要求 `max_tokens > 2`，旧值会返回 HTTP 400。
+  - 新增 `lib/deepseek-official.js` 共享 llm-deepseek 官方默认（baseURL / apiKeyEnv / 内置模型目录），`listModels` / `findTestTarget` / `resolveProxyHosts` 三处统一回退。
+  - 设置卡文案精简：测试连接提示（小字，注明「走已保存配置、改勾选后先保存」）、走代理按 API 地址整组生效、多模态说明。
+- 新增测试 `test/connection-test.test.js`（19 个用例）。
+
 ## v1.0.9 (2026-08-24)
 
 - **多模态模型镜像**：新增设置项 `multimodalModels`。用户在设置卡「多模态模型」区勾选模型后，宿主侧 `syncMultimodal()` 会把 `[text, image]` 镜像写进所属 provider 命名空间（`llm-pi-ai` 的 `models[].input` 或目录型 `modelOverrides[].input`；`llm-deepseek` 的 `models[].inputModalities`），取消勾选自动还原官方默认；已声明为文本的模型发图不再被 `UNSUPPORTED_CONTENT` 拒绝（对应 B.AI / 官方识图模型）。

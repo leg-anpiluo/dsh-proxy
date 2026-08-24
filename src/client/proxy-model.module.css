@@ -122,7 +122,7 @@
   box-sizing: border-box;
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid var(--dsw-alias-line-default, #d0d7de);
+  border: 1px solid var(--dsw-alias-border-l2, #d0d7de);
   border-radius: 6px;
   background: var(--dsw-alias-bg-base, #ffffff);
   color: var(--dsw-alias-label-primary, #1f2329);
@@ -130,7 +130,7 @@
 }
 
 .input:focus {
-  outline: 2px solid var(--dsw-alias-accent-default, #4f8cff);
+  outline: 2px solid var(--dsw-alias-state-business-primary, #4f8cff);
   outline-offset: -1px;
 }
 
@@ -172,7 +172,7 @@
   box-sizing: border-box;
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid var(--dsw-alias-line-default, #d0d7de);
+  border: 1px solid var(--dsw-alias-border-l2, #d0d7de);
   border-radius: 6px;
   background: var(--dsw-alias-bg-base, #ffffff);
   color: var(--dsw-alias-label-primary, #1f2329);
@@ -180,7 +180,7 @@
 }
 
 .select:focus {
-  outline: 2px solid var(--dsw-alias-accent-default, #4f8cff);
+  outline: 2px solid var(--dsw-alias-state-business-primary, #4f8cff);
   outline-offset: -1px;
 }
 
@@ -197,23 +197,23 @@
 .rowRemove {
   flex: none;
   padding: 4px 8px;
-  border: 1px solid var(--dsw-alias-line-default, #d0d7de);
+  border: 1px solid var(--dsw-alias-border-l2, #d0d7de);
   border-radius: 6px;
-  background: var(--dsw-alias-bg-subtle, #f6f8fa);
+  background: var(--dsw-alias-bg-layer-2, #f6f8fa);
   color: var(--dsw-alias-label-secondary, #4b5563);
   font-size: 12px;
   cursor: pointer;
 }
 
 .rowRemove:hover {
-  border-color: var(--dsw-alias-danger-default, #d1242f);
-  color: var(--dsw-alias-danger-default, #d1242f);
+  border-color: var(--dsw-alias-state-error-primary, #d1242f);
+  color: var(--dsw-alias-state-error-primary, #d1242f);
 }
 
 .rowAdd {
   align-self: flex-start;
   padding: 4px 10px;
-  border: 1px dashed var(--dsw-alias-line-strong, #a6adb4);
+  border: 1px dashed var(--dsw-alias-border-l3, #a6adb4);
   border-radius: 6px;
   background: transparent;
   color: var(--dsw-alias-label-secondary, #4b5563);
@@ -222,8 +222,8 @@
 }
 
 .rowAdd:hover {
-  border-color: var(--dsw-alias-accent-default, #4f8cff);
-  color: var(--dsw-alias-accent-default, #4f8cff);
+  border-color: var(--dsw-alias-state-business-primary, #4f8cff);
+  color: var(--dsw-alias-state-business-primary, #4f8cff);
 }
 
 .footer {
@@ -237,15 +237,15 @@
   padding: 6px 14px;
   border: none;
   border-radius: 6px;
-  background: var(--dsw-alias-accent-default, #4f8cff);
-  color: #ffffff;
+  background: var(--dsw-alias-button-primary-fill, #4f8cff);
+  color: var(--dsw-alias-label-primary-inverted, #ffffff);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
 }
 
 .primaryButton:hover {
-  background: var(--dsw-alias-accent-strong, #3b76e0);
+  background: var(--dsw-alias-button-primary-hover, #3b76e0);
 }
 
 .primaryButton:disabled {
@@ -255,16 +255,16 @@
 
 .ghostButton {
   padding: 6px 12px;
-  border: 1px solid var(--dsw-alias-line-default, #d0d7de);
+  border: 1px solid var(--dsw-alias-border-l2, #d0d7de);
   border-radius: 6px;
-  background: var(--dsw-alias-bg-subtle, #f6f8fa);
+  background: var(--dsw-alias-bg-layer-2, #f6f8fa);
   color: var(--dsw-alias-label-secondary, #4b5563);
   font-size: 13px;
   cursor: pointer;
 }
 
 .ghostButton:hover {
-  border-color: var(--dsw-alias-line-strong, #a6adb4);
+  border-color: var(--dsw-alias-border-l3, #a6adb4);
 }
 
 .saveStatus {
@@ -273,11 +273,11 @@
 }
 
 .saveStatusOk {
-  color: var(--dsw-alias-success-default, #1a7f37);
+  color: var(--dsw-alias-state-success-primary, #1a7f37);
 }
 
 .saveStatusError {
-  color: var(--dsw-alias-danger-default, #d1242f);
+  color: var(--dsw-alias-state-error-primary, #d1242f);
 }
 
 .saveStatusHint {

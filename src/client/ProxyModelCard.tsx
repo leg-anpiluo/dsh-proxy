@@ -44,6 +44,7 @@ interface ProxyConfig {
   proxyHost: string
   proxyPort: number
   proxiedModels: string[]
+  multimodalModels: string[]
   retries: number
   retryIntervalMs: number
 }
@@ -53,18 +54,20 @@ const DEFAULTS: ProxyConfig = {
   proxyHost: '127.0.0.1',
   proxyPort: 7897,
   proxiedModels: [],
+  multimodalModels: [],
   retries: 3,
   retryIntervalMs: 1000,
 }
 
 /** Fields surfaced in the UI, in write order. */
-const UI_FIELDS = ['proxyHost', 'proxyPort', 'proxiedModels', 'retries', 'retryIntervalMs'] as const
+const UI_FIELDS = ['proxyHost', 'proxyPort', 'proxiedModels', 'multimodalModels', 'retries', 'retryIntervalMs'] as const
 
 /** The draft form state backing the manual-entry fields. */
 interface FormState {
   proxyHost: string
   proxyPort: string
   proxiedModels: string[]
+  multimodalModels: string[]
   retries: string
   retryIntervalMs: string
 }
@@ -80,6 +83,7 @@ function emptyForm(): FormState {
     proxyHost: '',
     proxyPort: String(DEFAULTS.proxyPort),
     proxiedModels: [],
+    multimodalModels: [],
     retries: String(DEFAULTS.retries),
     retryIntervalMs: String(DEFAULTS.retryIntervalMs),
   }
@@ -91,6 +95,7 @@ function formFromConfig(value: ProxyConfig): FormState {
     proxyHost: value.proxyHost ?? '',
     proxyPort: String(value.proxyPort ?? DEFAULTS.proxyPort),
     proxiedModels: [...(value.proxiedModels ?? [])],
+    multimodalModels: [...(value.multimodalModels ?? [])],
     retries: String(value.retries ?? DEFAULTS.retries),
     retryIntervalMs: String(value.retryIntervalMs ?? DEFAULTS.retryIntervalMs),
   }
@@ -102,6 +107,7 @@ function fieldFromForm(form: FormState, field: (typeof UI_FIELDS)[number]): unkn
     case 'proxyHost': return form.proxyHost.trim()
     case 'proxyPort': return Number(form.proxyPort)
     case 'proxiedModels': return [...form.proxiedModels]
+    case 'multimodalModels': return [...form.multimodalModels]
     case 'retries': return Number(form.retries)
     case 'retryIntervalMs': return Number(form.retryIntervalMs)
   }
@@ -142,6 +148,7 @@ function mergeDefaults(base: Partial<ProxyConfig> | undefined): ProxyConfig {
     proxyHost: base?.proxyHost ?? DEFAULTS.proxyHost,
     proxyPort: base?.proxyPort ?? DEFAULTS.proxyPort,
     proxiedModels: base?.proxiedModels ?? DEFAULTS.proxiedModels,
+    multimodalModels: base?.multimodalModels ?? DEFAULTS.multimodalModels,
     retries: base?.retries ?? DEFAULTS.retries,
     retryIntervalMs: base?.retryIntervalMs ?? DEFAULTS.retryIntervalMs,
   }
@@ -268,15 +275,22 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
     setForm({ ...form, proxiedModels: selected })
   }
 
-  /** Display label for a model row: `[厂商] 模型名`. */
-  const rowLabel = (row: ProxyModelRow): string =>
-    row.providerLabel !== '' ? `[${row.providerLabel}] ${row.name}` : row.name
-
-  const selectedNames = (): string[] => {
-    const byKey = new Map(models.map((row) => [row.key, rowLabel(row)]))
-    return form.proxiedModels
-      .map((key) => byKey.get(key) ?? key)
+  const toggleMultimodal = (key: string): void => {
+    setSaved(false)
+    const selected = form.multimodalModels.includes(key)
+      ? form.multimodalModels.filter((k) => k !== key)
+      : [...form.multimodalModels, key]
+    setForm({ ...form, multimodalModels: selected })
   }
+
+  /** Display label for a model row: `[厂商] 模型名`; the vendor prefix is
+   * dropped when the model name already carries it (e.g. B.AI names are
+   * already "deepseek-v4-flash（B.AI）", so the bracketed prefix would just
+   * repeat the same text). */
+  const rowLabel = (row: ProxyModelRow): string =>
+    row.providerLabel !== '' && !row.name.includes(row.providerLabel)
+      ? `[${row.providerLabel}] ${row.name}`
+      : row.name
 
   /**
    * Models still selectable (not yet proxied), in config order. Every listed
@@ -355,9 +369,53 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
             <option key={row.key} value={row.key}>{rowLabel(row)}</option>
           ))}
         </select>
-        {form.proxiedModels.length > 0 && (
-          <p className={styles.fieldHint}>{t('selectedModels')}：{selectedNames().join('、')}</p>
-        )}
+      </div>
+
+      <div className={styles.field}>
+        <span className={styles.fieldLabel}>{t('fieldMultimodalModels')}</span>
+        <span className={styles.fieldHint}>{t('fieldMultimodalModelsHint')}</span>
+        {modelsError !== null
+          ? <p className={styles.status}>{modelsError}</p>
+          : models.length === 0
+            ? <p className={styles.status}>{t('statusLoading')}</p>
+            : (
+              <ul className={styles.rowList}>
+                {form.multimodalModels.map((key) => {
+                  const row = models.find((m) => m.key === key)
+                  return (
+                    <li key={key} className={styles.row}>
+                      <span className={styles.rowLabel}>{row ? rowLabel(row) : key}</span>
+                      <button
+                        type="button"
+                        className={styles.rowRemove}
+                        data-testid="remove-multimodal-model"
+                        onClick={() => toggleMultimodal(key)}
+                      >
+                        {t('remove')}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+        <select
+          className={styles.select}
+          data-testid="add-multimodal-model"
+          value=""
+          disabled={models.length === 0}
+          onChange={(event) => {
+            if (event.target.value !== '') toggleMultimodal(event.target.value)
+          }}
+        >
+          <option value="">{t('selectModel')}</option>
+          {models
+            .filter((row) => !form.multimodalModels.includes(row.key))
+            .map((row) => (
+              <option key={row.key} value={row.key}>
+                {rowLabel(row)}{row.inputModalities.includes('image') ? `（${t('multimodalBadge')}）` : ''}
+              </option>
+            ))}
+        </select>
       </div>
 
       <div className={styles.fieldRow}>

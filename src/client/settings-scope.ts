@@ -49,6 +49,7 @@ export interface ProxyModelRow {
   name: string
   providerLabel: string
   host: string
+  inputModalities: string[]
 }
 
 /** The scope face the proxy-model section consumes. */
@@ -294,10 +295,18 @@ function createCompatScope(primary: OfficialScopeFace, fetchFn: typeof fetch): P
 
   const project = (): ProxyModelSnapshot => {
     const primarySnapshot = snapshotOf(primary.getSnapshot())
-    if (primarySnapshot.status === 'ready' || primarySnapshot.status === 'loading') return primarySnapshot
+    // The official scope is authoritative when it has settled to ready.
+    if (primarySnapshot.status === 'ready') return primarySnapshot
+    // Otherwise prefer a settled bridge — the official scope can legitimately
+    // stay 'loading' forever (its describe mirror never folds a view for this
+    // namespace), so a ready bridge must not be masked by a loading primary.
     const bridgeSnapshot = fallback.getSnapshot()
     if (bridgeSnapshot.status === 'ready') return bridgeSnapshot
-    if (bridgeSnapshot.status === 'loading') return { ...primarySnapshot, status: 'loading' }
+    // Neither settled: surface loading while either is still loading so the
+    // card never flashes a stale value.
+    if (primarySnapshot.status === 'loading' || bridgeSnapshot.status === 'loading') {
+      return { ...primarySnapshot, status: 'loading' }
+    }
     return primarySnapshot
   }
 
@@ -314,11 +323,23 @@ function createCompatScope(primary: OfficialScopeFace, fetchFn: typeof fetch): P
   const unsubscribes = [
     primary.subscribe(() => {
       publish()
-      if (snapshotOf(primary.getSnapshot()).status === 'unavailable') startFallback()
+      // The official scope is the preferred path only while it reports ready.
+      // Anything else (loading / unavailable) means we cannot rely on it —
+      // start the bridge fallback so the card can settle, rather than hanging
+      // on a primary that never flips off 'loading'.
+      if (snapshotOf(primary.getSnapshot()).status !== 'ready') startFallback()
     }),
     fallback.subscribe(publish),
   ]
-  if (snapshotOf(primary.getSnapshot()).status === 'unavailable') startFallback()
+  // Kick the fallback off whenever the official scope is not already ready:
+  // the card must not hang on a primary stuck 'loading' (e.g. a describe
+  // mirror that never settles). The bridge is a cheap same-origin read, and
+  // once both are ready the composite prefers the official value.
+  if (snapshotOf(primary.getSnapshot()).status !== 'ready') startFallback()
+  // Seed the composite store from the current state (useSyncExternalStore
+  // reads it directly); without this the store can sit on its initial
+  // 'loading' until the primary emits a change.
+  publish()
 
   const active = (): OfficialScopeFace | BridgeScopeController => {
     // The official scope is the write path ONLY while it reports ready.

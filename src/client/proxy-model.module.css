@@ -124,9 +124,10 @@
   padding: 6px 8px;
   border: 1px solid var(--dsw-alias-border-l2, #d0d7de);
   border-radius: 6px;
-  background: var(--dsw-alias-bg-base, #ffffff);
+  background: var(--dsw-alias-bg-layer-2, #f6f8fa);
   color: var(--dsw-alias-label-primary, #1f2329);
   font-size: 13px;
+  color-scheme: light;
 }
 
 .input:focus {
@@ -174,14 +175,32 @@
   padding: 6px 8px;
   border: 1px solid var(--dsw-alias-border-l2, #d0d7de);
   border-radius: 6px;
-  background: var(--dsw-alias-bg-base, #ffffff);
+  background: var(--dsw-alias-bg-layer-2, #f6f8fa);
   color: var(--dsw-alias-label-primary, #1f2329);
   font-size: 13px;
+  color-scheme: light;
 }
 
 .select:focus {
   outline: 2px solid var(--dsw-alias-state-business-primary, #4f8cff);
   outline-offset: -1px;
+}
+
+/* Native <select>/<input> widgets must follow the DSH dark theme explicitly:
+   the app switches dark mode via body[data-ds-dark-theme], independent of the
+   OS prefers-color-scheme, so `light dark` alone would keep the native popup
+   light. Force `dark` under the app's dark theme so the option list and
+   dropdown arrow render dark too. */
+:global(body[data-ds-dark-theme]) .input,
+:global(body[data-ds-dark-theme]) .select {
+  color-scheme: dark;
+}
+
+/* Belt-and-braces: make the option list itself follow the app palette even in
+   browsers that ignore color-scheme for the popup. */
+.select option {
+  background: var(--dsw-alias-bg-layer-2, #f6f8fa);
+  color: var(--dsw-alias-label-primary, #1f2329);
 }
 
 .rowInput {
@@ -237,8 +256,13 @@
   padding: 6px 14px;
   border: none;
   border-radius: 6px;
+  /* Match the platform's own settings primary button exactly: the fill token
+     plus label-primary-foreground. --dsw-alias-label-primary-inverted resolves
+     to a washed-out #353638 in dark mode (near-white button + grey text); the
+     canonical foreground token resolves to crisp #0f1115 so the dark-mode
+     "保存" stays readable and consistent with every other DSH primary button. */
   background: var(--dsw-alias-button-primary-fill, #4f8cff);
-  color: var(--dsw-alias-label-primary-inverted, #ffffff);
+  color: var(--dsw-alias-label-primary-foreground, #ffffff);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;

@@ -22,7 +22,6 @@ export const zh = {
   fieldRetryIntervalMs: '重试间隔（retryIntervalMs）',
   fieldRetryIntervalMsHint: '每次重试之间的等待毫秒数（0–60000）。',
   selectModel: '选择模型…',
-  selectedModels: '已选择',
   remove: '移除',
   save: '保存',
   saving: '保存中…',
@@ -33,6 +32,9 @@ export const zh = {
   invalidEmpty: '代理地址不能为空。',
   expand: '展开',
   collapse: '收起',
+  fieldMultimodalModels: '多模态模型（multimodalModels）',
+  fieldMultimodalModelsHint: '勾选后，该模型会在所属 provider 的声明中写入 image（支持图片输入），DSH 不再拒绝向它发送图片；取消勾选自动还原官方默认。',
+  multimodalBadge: '🖼 多模态',
 }
 
 /** English dictionary, checked complete against the zh key set. */
@@ -53,7 +55,6 @@ export const en: Record<keyof typeof zh, string> = {
   fieldRetryIntervalMs: 'Retry interval (retryIntervalMs)',
   fieldRetryIntervalMsHint: 'Milliseconds between retry attempts (0–60000).',
   selectModel: 'Select model…',
-  selectedModels: 'Selected',
   remove: 'Remove',
   save: 'Save',
   saving: 'Saving…',
@@ -64,6 +65,9 @@ export const en: Record<keyof typeof zh, string> = {
   invalidEmpty: 'Proxy host must not be empty.',
   expand: 'Expand',
   collapse: 'Collapse',
+  fieldMultimodalModels: 'Multimodal models (multimodalModels)',
+  fieldMultimodalModelsHint: 'When checked, image is written into the model\u2019s declaration in its owning provider (advertised as accepting image input), so DSH no longer refuses image requests to it; unchecking restores the official defaults.',
+  multimodalBadge: '🖼 Multimodal',
 }
 
 export type ProxyKey = keyof typeof zh

@@ -10,7 +10,7 @@ DSH 模型代理插件：给 LLM 请求按「目标域名」分流——选中�
 - **失败自动重试**：对断连（ECONNRESET 等）、HTTP 429 限流、5xx 错误自动重试（默认 3 次、间隔 1s），减少免费额度被瞬时错误打断。
 - **模型列表与官方一致（v1.0.3）**：只配了 `apiKeyEnv`、没写 `models` 的 provider（如 `xiaomi`），其模型从 pi-ai 内置目录（`@earendil-works/pi-ai`）回退补齐，勾选列表与 DSH 官方模型选择器完全同步；目录更新（`npm update` 后）自动跟随，无需手改配置。
 - **retryPolicy 镜像（v1.0.3）**：卡片上的 `retries`/`retryIntervalMs` 会镜像进被勾选 provider 的官方 `retryPolicy`（驱动设置页可见的 `(retry/maximum)` 提示），取消勾选自动还原官方默认值——一套配置同时驱动传输层重试与官方重试 UI。
-- **多模态模型镜像（v1.0.9）**：仅声明为文本的模型发图会被 DSH 以 `UNSUPPORTED_CONTENT` 拒绝（如 B.AI 的 `deepseek-v4-flash`）。在设置卡「多模态模型」区勾选后，插件把 `image` 写进所属 provider 的模型声明（pi-ai 的 `models[].input` / 目录型 `modelOverrides[].input`，官方 DeepSeek 的 `models[].inputModalities`），该模型即被声明支持图片输入、发图请求不再被 DSH 拒绝；取消勾选自动还原官方默认。
+- **多模态模型镜像（v1.0.9）**：DSH 官方模型声明里，部分**支持图像识别**的模型（如 `deepseek-v4-flash-vision-exp`）没有可供用户勾选「图像输入」的配置入口，选中后发图会被 DSH 以 `UNSUPPORTED_CONTENT` 拒绝。在设置卡「多模态模型」区勾选这些模型后，插件把 `image` 写进所属 provider 的模型声明（pi-ai 的 `models[].input` / 目录型 `modelOverrides[].input`，官方 DeepSeek 的 `models[].inputModalities`），使 DSH 允许对该模型发图；取消勾选自动还原官方默认。注意：该功能只对真正支持图像输入的模型（如 vision 模型）有意义，纯文本模型（如 `deepseek-v4-flash`）勾选后 DSH 虽放行，实际请求仍会因模型不支持图像而报错。
 - **保存即生效，无需重启**：设置写入 `llm-proxy` 命名空间后运行时整体替换 dispatcher，不碰 `settings.yaml` 里的供应商配置。冷启动时若 provider 命名空间（`llm-pi-ai`/`llm-deepseek`）尚未注册，插件会带退避重试直到可解析代理域名，不再需要手动"恢复默认再保存"。
 
 ## 用什么技术
@@ -46,7 +46,7 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 |---|---|---|
 | `proxyHost` / `proxyPort` | `127.0.0.1:7897` | 代理地址（Clash 等），可不在本机 |
 | `proxiedModels` | `[]` | 走代理的模型，`<providerId>/<modelId>`，其余直连 |
-| `multimodalModels` | `[]` | 多模态镜像：勾选的模型在所属 provider 声明中标记为支持图片输入（pi-ai 写 `input`、官方 DeepSeek 写 `inputModalities`），发图请求不再被 DSH 拒绝，取消勾选自动还原 |
+| `multimodalModels` | `[]` | 多模态镜像：勾选**支持图像识别但官方声明/UI 没有图像输入入口**的模型（如 `deepseek-v4-flash-vision-exp`），插件在所属 provider 声明中标记支持图片输入（pi-ai 写 `input`、官方 DeepSeek 写 `inputModalities`），发图不再被 DSH 拒绝；纯文本模型（如 `deepseek-v4-flash`）勾选无意义；取消勾选自动还原 |
 | `retries` / `retryIntervalMs` | `3` / `1000` | 失败重试次数与间隔（ms） |
 
 ## 验证

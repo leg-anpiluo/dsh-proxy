@@ -47,6 +47,9 @@ interface ProxyConfig {
   multimodalModels: string[]
   retries: number
   retryIntervalMs: number
+  failoverEnabled: boolean
+  failoverProxy: string
+  negativeCacheTtlMs: number
 }
 
 /** Schema defaults mirrored from lib/index.js (reset target + base merge). */
@@ -57,10 +60,23 @@ const DEFAULTS: ProxyConfig = {
   multimodalModels: [],
   retries: 3,
   retryIntervalMs: 1000,
+  failoverEnabled: true,
+  failoverProxy: '',
+  negativeCacheTtlMs: 60000,
 }
 
 /** Fields surfaced in the UI, in write order. */
-const UI_FIELDS = ['proxyHost', 'proxyPort', 'proxiedModels', 'multimodalModels', 'retries', 'retryIntervalMs'] as const
+const UI_FIELDS = [
+  'proxyHost',
+  'proxyPort',
+  'proxiedModels',
+  'multimodalModels',
+  'retries',
+  'retryIntervalMs',
+  'failoverEnabled',
+  'failoverProxy',
+  'negativeCacheTtlMs',
+] as const
 
 /** The draft form state backing the manual-entry fields. */
 interface FormState {
@@ -70,6 +86,9 @@ interface FormState {
   multimodalModels: string[]
   retries: string
   retryIntervalMs: string
+  failoverEnabled: boolean
+  failoverProxy: string
+  negativeCacheTtlMs: string
 }
 
 /** JSON-compatible deep equality (the card values are plain JSON). */
@@ -86,6 +105,9 @@ function emptyForm(): FormState {
     multimodalModels: [],
     retries: String(DEFAULTS.retries),
     retryIntervalMs: String(DEFAULTS.retryIntervalMs),
+    failoverEnabled: DEFAULTS.failoverEnabled,
+    failoverProxy: DEFAULTS.failoverProxy,
+    negativeCacheTtlMs: String(DEFAULTS.negativeCacheTtlMs),
   }
 }
 
@@ -98,6 +120,9 @@ function formFromConfig(value: ProxyConfig): FormState {
     multimodalModels: [...(value.multimodalModels ?? [])],
     retries: String(value.retries ?? DEFAULTS.retries),
     retryIntervalMs: String(value.retryIntervalMs ?? DEFAULTS.retryIntervalMs),
+    failoverEnabled: value.failoverEnabled ?? DEFAULTS.failoverEnabled,
+    failoverProxy: value.failoverProxy ?? DEFAULTS.failoverProxy,
+    negativeCacheTtlMs: String(value.negativeCacheTtlMs ?? DEFAULTS.negativeCacheTtlMs),
   }
 }
 
@@ -110,11 +135,14 @@ function fieldFromForm(form: FormState, field: (typeof UI_FIELDS)[number]): unkn
     case 'multimodalModels': return [...form.multimodalModels]
     case 'retries': return Number(form.retries)
     case 'retryIntervalMs': return Number(form.retryIntervalMs)
+    case 'failoverEnabled': return form.failoverEnabled === true
+    case 'failoverProxy': return form.failoverProxy.trim()
+    case 'negativeCacheTtlMs': return Number(form.negativeCacheTtlMs)
   }
 }
 
 /** Validate the draft; returns an error key or null. */
-function validateForm(form: FormState): 'invalidEmpty' | 'invalidRange' | null {
+function validateForm(form: FormState): 'invalidEmpty' | 'invalidRange' | 'invalidProxyUrl' | null {
   if (form.proxyHost.trim() === '') return 'invalidEmpty'
   if (!/^\d+$/.test(form.proxyPort.trim())) return 'invalidRange'
   const port = Number(form.proxyPort)
@@ -123,6 +151,12 @@ function validateForm(form: FormState): 'invalidEmpty' | 'invalidRange' | null {
   if (!/^\d+$/.test(form.retryIntervalMs.trim())) return 'invalidRange'
   if (Number(form.retries) > 10) return 'invalidRange'
   if (Number(form.retryIntervalMs) > 60000) return 'invalidRange'
+  if (!/^\d+$/.test(form.negativeCacheTtlMs.trim())) return 'invalidRange'
+  if (Number(form.negativeCacheTtlMs) > 3600000) return 'invalidRange'
+  const failoverProxy = form.failoverProxy.trim()
+  if (failoverProxy !== '' && !/^https?:\/\//.test(failoverProxy) && !/^socks5?:\/\//.test(failoverProxy)) {
+    return 'invalidProxyUrl'
+  }
   return null
 }
 
@@ -151,6 +185,9 @@ function mergeDefaults(base: Partial<ProxyConfig> | undefined): ProxyConfig {
     multimodalModels: base?.multimodalModels ?? DEFAULTS.multimodalModels,
     retries: base?.retries ?? DEFAULTS.retries,
     retryIntervalMs: base?.retryIntervalMs ?? DEFAULTS.retryIntervalMs,
+    failoverEnabled: base?.failoverEnabled ?? DEFAULTS.failoverEnabled,
+    failoverProxy: base?.failoverProxy ?? DEFAULTS.failoverProxy,
+    negativeCacheTtlMs: base?.negativeCacheTtlMs ?? DEFAULTS.negativeCacheTtlMs,
   }
 }
 
@@ -488,6 +525,43 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
           step={1}
           onChange={(value) => { setSaved(false); setForm({ ...form, retryIntervalMs: value }) }}
         />
+      </div>
+
+      <div className={styles.field}>
+        <span className={styles.fieldLabel}>{t('fieldFailoverEnabled')}</span>
+        <label className={styles.checkRow}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            data-testid="field-failoverEnabled"
+            checked={form.failoverEnabled}
+            onChange={(event) => { setSaved(false); setForm({ ...form, failoverEnabled: event.target.checked }) }}
+          />
+          <span className={styles.checkLabel}>{form.failoverEnabled ? t('failoverOn') : t('failoverOff')}</span>
+        </label>
+        <span className={styles.fieldHint}>{t('fieldFailoverEnabledHint')}</span>
+        <div className={form.failoverEnabled ? styles.fieldRow : styles.fieldRowDisabled}>
+          <TextField
+            label={t('fieldFailoverProxy')}
+            hint={t('fieldFailoverProxyHint')}
+            value={form.failoverProxy}
+            placeholder={`${DEFAULTS.proxyHost}:${DEFAULTS.proxyPort}`}
+            testId="field-failoverProxy"
+            onChange={(value) => { setSaved(false); setForm({ ...form, failoverProxy: value }) }}
+          />
+          <TextField
+            label={t('fieldNegativeCacheTtlMs')}
+            hint={t('fieldNegativeCacheTtlMsHint')}
+            value={form.negativeCacheTtlMs}
+            placeholder={String(DEFAULTS.negativeCacheTtlMs)}
+            testId="field-negativeCacheTtlMs"
+            type="number"
+            min={0}
+            max={3600000}
+            step={1000}
+            onChange={(value) => { setSaved(false); setForm({ ...form, negativeCacheTtlMs: value }) }}
+          />
+        </div>
       </div>
 
       <div className={styles.footer}>

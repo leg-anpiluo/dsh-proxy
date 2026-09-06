@@ -106,6 +106,33 @@
   min-width: 0;
 }
 
+/* Dimmed failover sub-fields while the failover toggle is off. */
+.fieldRowDisabled {
+  opacity: 0.5;
+}
+
+/* The failover enable toggle row. */
+.checkRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--dsw-alias-state-business-primary, #4f8cff);
+  cursor: pointer;
+}
+
+.checkLabel {
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .fieldLabel {
   color: var(--dsw-alias-label-primary, #1f2329);
   font-size: 13px;

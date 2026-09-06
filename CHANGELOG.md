@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.0.0 (2026-09-06)
+
+- **直连失败自动回退（failover）**：未走代理的请求（网络搜索、web_fetch、国内模型 API——一切走全局 fetch 且不在「走代理的模型」里的目标）在直连传输层失败（连接拒绝 / DNS 失败 / 超时 / 连接重置，响应未开始）时，自动经代理重发一次（`lib/failover-dispatcher.js`）。走代理的模型不受影响——它们没有直连路径可回退，主代理挂了错误直接暴露，不会被同一个死代理二次重试。默认开启，回退端点默认复用主代理（`proxyHost:proxyPort`），也可用 `failoverProxy` 指定专用回退地址（支持 `http://`、`https://`、`socks5://`，SOCKS5 走 undici 8 原生 `Socks5ProxyAgent`）。该功能吸收了 dsh-proxy-switch 插件的核心场景，且在 dispatcher 层实现（TLS 校验正常、连接池复用、无手写 body 重放）。
+- **失败主机负缓存（negativeCacheTtlMs）**：某地址直连失败、经代理成功后，在 TTL 窗口内（默认 60s）后续请求直接走代理，不再重复支付直连超时；窗口内一次直连成功即清除条目，直连恢复可自动切回。设为 0 则每次请求都先试直连。
+- **重试分工收窄**：`RetryAgent` 的传输层错误码从 9 个收窄为 `ECONNRESET` / `EPIPE` / `UND_ERR_SOCKET`（连接已建立后的中途断开）；CONNECT 级失败（ECONNREFUSED / ENOTFOUND / 超时等）归 failover 层处理，避免死路径被「重试 3 次 × 回退 1 次」放大锤打。429/5xx 重试语义不变。
+- **设置卡「直连回退」分区**：新增 `failoverEnabled`（开关）、`failoverProxy`（回退地址，留空复用主代理，格式校验 http/https/socks5）、`negativeCacheTtlMs` 三个配置项，保存即生效；开关关闭时子表单置灰。
+- dispatcher 栈变为 `RetryAgent(FailoverDispatcher(RoutingDispatcher))`，日志相应更新；`RoutingDispatcher` 仅重构出 `routeOf()`（行为不变，原 11 个路由测试原样通过）。
+- 新增测试 `test/failover-dispatcher.test.js`（21 个用例，fake undici shim）与 `test/failover-smoke-test.mjs`（12 项端到端检查，真实 undici + 本地双服务器：直连存活、直连死亡回退、负缓存命中与过期、禁用回退、流式 body 不回退）。
+
 ## v1.1.0 (2026-08-24)
 
 - **测试连接**：走代理的模型列表每行新增「测试连接」按钮。宿主侧新增 loopback 桥接端点 `POST /api/dsh-llm-proxy/settings/test`，对被勾选模型发一个最小 `chat/completions` 探测请求（走插件自己的全局 dispatcher，即真实代理路径），返回 HTTP 状态 / 耗时 / 是否经代理 / 多模态是否开启；网络超时、认证失败、限流、服务端错误都有明确提示（`lib/connection-test.js`）。

@@ -1,6 +1,15 @@
-# @superfish058/dsh-llm-proxy v1.0.0 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
+# @superfish058/dsh-llm-proxy v2.0.0 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
 #
-# v1.0.0 redesign (model-level intent):
+# v2.0.0 (direct failover):
+#   failoverEnabled    replay DIRECT-path requests once through the failover
+#                      proxy when the direct connection fails at transport
+#                      level (search, web fetch, domestic APIs). Default on.
+#   failoverProxy      dedicated failover endpoint (http://, https:// or
+#                      socks5:// URL); empty reuses proxyHost:proxyPort.
+#   negativeCacheTtlMs how long a host whose fallback just succeeded skips the
+#                      doomed direct attempt (ms; 0 retries direct every time).
+#
+# v1.0.0 (model-level intent):
 #   proxyHost      proxy hostname/IP (does not have to be this machine; default 127.0.0.1)
 #   proxyPort      proxy port (default 7897)
 #   proxiedModels  model keys that route through the proxy, `<providerId>/<modelId>`
@@ -20,3 +29,6 @@
         #   - 'deepseek-v4-flash/deepseek-v4-flash'   # b.ai provider
         retries: 3
         retryIntervalMs: 1000
+        failoverEnabled: true
+        # failoverProxy: ''            # '' = reuse proxyHost:proxyPort
+        negativeCacheTtlMs: 60000

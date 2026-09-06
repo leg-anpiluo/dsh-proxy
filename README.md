@@ -2,12 +2,14 @@
 
 [![npm](https://img.shields.io/npm/v/@superfish058/dsh-llm-proxy)](https://www.npmjs.com/package/@superfish058/dsh-llm-proxy)
 
-DSH 模型代理插件：给 LLM 请求按「目标域名」分流——选中的模型走代理，其余直连，失败自动重试。
+DSH 模型代理插件：给请求按「目标域名」分流——选中的模型走代理，其余直连并在**直连失败时自动回退代理**，另带失败自动重试。
 
 ## 它是干嘛的
 
 - **按模型走代理**：在 DSH 设置页（插件 → 可配置插件 → 模型代理）勾选需要走代理的模型（如 `deepseek-v4-flash`），该模型的请求自动经 `proxyHost:proxyPort`（默认 `127.0.0.1:7897`，即 Clash）转发；未勾选的模型（DeepSeek、小米、通义等国内 API）保持直连。路由按模型的 **API 地址（baseURL host）** 生效：选中一个模型后，同一地址下的所有模型都会走代理（例如 B.AI 的 `deepseek-v4-flash` 与 `deepseek-v4-flash-vision-exp` 共享 `api.b.ai`）。
-- **失败自动重试**：对断连（ECONNRESET 等）、HTTP 429 限流、5xx 错误自动重试（默认 3 次、间隔 1s），减少免费额度被瞬时错误打断。
+- **直连失败自动回退（v2.0.0）**：所有**没有**走代理的请求——网络搜索、web_fetch、国内模型 API 等一切走全局 `fetch` 的目标——直连传输层失败（连接拒绝 / DNS 失败 / 超时 / 连接重置，且响应尚未开始）时，自动经回退代理重发一次。回退端点默认复用主代理（`proxyHost:proxyPort`），可用 `failoverProxy` 指定专用地址（`http://` / `https://` / `socks5://`）。走代理的模型不参与回退（它们本就没有直连路径）；本机服务（localhost / 127.0.0.1 / ::1）永不回退；流式请求体不可重放时不回退。
+- **失败主机负缓存**：某地址回退成功后，在 `negativeCacheTtlMs` 窗口内（默认 60s）直接走代理，不再重复支付直连超时；窗口内直连一旦成功立即恢复直连优先。
+- **失败自动重试**：对断连（连接已建立后的 ECONNRESET 等）、HTTP 429 限流、5xx 错误自动重试（默认 3 次、间隔 1s），减少免费额度被瞬时错误打断。CONNECT 级失败由回退层处理，重试只管「已连上后」的中途断开与状态码，不会反复锤打死路径。
 - **模型列表与官方一致**：只配了 `apiKeyEnv`、没写 `models` 的 provider（如 `xiaomi`），其模型从 pi-ai 内置目录（`@earendil-works/pi-ai`）回退补齐；`llm-deepseek` 命名空间即使保持默认空文档（`llm-deepseek: {}`）也回退官方内置目录（`https://api.deepseek.com` + `DEEPSEEK_API_KEY`），`deepseek-official/*` 模型开箱可用。勾选列表与 DSH 官方模型选择器完全同步。
 - **retryPolicy 镜像**：卡片上的 `retries`/`retryIntervalMs` 会镜像进被勾选 provider 的官方 `retryPolicy`（驱动设置页可见的 `(retry/maximum)` 提示），取消勾选自动还原官方默认值——一套配置同时驱动传输层重试与官方重试 UI。
 - **多模态模型镜像**：DSH 官方模型声明里，部分**支持图像识别**的模型（如 `deepseek-v4-flash-vision-exp`）没有可供用户勾选「图像输入」的配置入口，选中后发图会被 DSH 以 `UNSUPPORTED_CONTENT` 拒绝。在设置卡「多模态模型」区勾选这些模型后，插件把 `image` 写进所属 provider 的模型声明（pi-ai 的 `models[].input` / 目录型 `modelOverrides[].input`，官方 DeepSeek 的 `models[].inputModalities`），使 DSH 允许对该模型发图；取消勾选自动还原官方默认。注意：该功能只对真正支持图像输入的模型（如 vision 模型）有意义，纯文本模型（如 `deepseek-v4-flash`）勾选后 DSH 虽放行，实际请求仍会因模型不支持图像而报错。
@@ -16,7 +18,7 @@ DSH 模型代理插件：给 LLM 请求按「目标域名」分流——选中�
 
 ## 用什么技术
 
-- **undici 全局 Dispatcher 注入**：`RoutingDispatcher`（按 hostname 路由）+ 官方 `RetryAgent`（重试）包一层自定义 dispatcher 挂到 Node 全局。LLM 请求（OpenAI SDK → undici fetch）自动经过它，位于 LLM 适配器之下、供应商之上。
+- **undici 全局 Dispatcher 注入**：`RetryAgent(FailoverDispatcher(RoutingDispatcher))` 挂到 Node 全局——`RoutingDispatcher`（按 hostname 路由：选中模型 host → ProxyAgent，其余直连）、`FailoverDispatcher`（直连路径的回退 + 负缓存）、官方 `RetryAgent`（429/5xx 与中途断开重试）。LLM 请求与搜索、web_fetch 等（OpenAI SDK → undici fetch）自动经过它，位于 LLM 适配器之下、供应商之上。
 - **Cordis 插件**：宿主侧注册 `llm-proxy` 设置命名空间（`lib/settings.js`）；浏览器侧设置卡片（`src/client/`，挂 `settings.plugin.item` slot，走官方 transport、bridge 兜底）。
 - **客户端构建**：tsdown（Rolldown）打包 `lib/client.js`，经 `window.__ModuleLoader__` 注入前端。
 
@@ -24,6 +26,7 @@ DSH 模型代理插件：给 LLM 请求按「目标域名」分流——选中�
 
 - 国内网络访问**境外模型 API**（如 `api.b.ai`）超时/不可达——代理已就绪，只想让特定模型走。
 - **免费额度**被 429/5xx 打断，需要自动重试扛过限流窗口。
+- **直连不稳定**：搜索 / web_fetch / 国内 API 偶发连接失败，希望自动经代理兜底而不用改系统代理。
 - 想**按模型粒度**控制代理，而不是全局开代理连累国内直连 API。
 
 ## 安装
@@ -46,6 +49,9 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 | `proxiedModels` | `[]` | 走代理的模型，`<providerId>/<modelId>`，其余直连 |
 | `multimodalModels` | `[]` | 多模态镜像：勾选**支持图像识别但官方声明/UI 没有图像输入入口**的模型（如 `deepseek-v4-flash-vision-exp`），插件在所属 provider 声明中标记支持图片输入（pi-ai 写 `input`、官方 DeepSeek 写 `inputModalities`），发图不再被 DSH 拒绝；纯文本模型（如 `deepseek-v4-flash`）勾选无意义；取消勾选自动还原 |
 | `retries` / `retryIntervalMs` | `3` / `1000` | 失败重试次数与间隔（ms） |
+| `failoverEnabled` | `true` | 直连失败自动回退：非代理目标的直连传输层失败时经代理重发一次 |
+| `failoverProxy` | `''`（复用主代理） | 专用回退端点，`http://` / `https://` / `socks5://` URL |
+| `negativeCacheTtlMs` | `60000` | 回退成功后该地址跳过直连的时长（ms），`0` 关闭缓存 |
 
 ## 验证
 
@@ -59,10 +65,10 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 **日志方式**：重启后日志出现：
 
 ```
-dsh-llm-proxy: global dispatcher → RetryAgent(RoutingDispatcher) (proxy=127.0.0.1:7897, ...)
+dsh-llm-proxy: global dispatcher → RetryAgent(FailoverDispatcher(RoutingDispatcher)) (proxy=127.0.0.1:7897, proxiedHosts=[...], retries=3×1000ms, failover=on (main-proxy), negCacheTtl=60000ms)
 ```
 
-模型选择器里选中代理模型，流式响应正常、仅该模型域名走代理即成功。
+直连失败触发回退时，日志出现 `dsh-llm-proxy: direct → <host> failed (<错误码>) — retrying via main-proxy failover proxy`。模型选择器里选中代理模型，流式响应正常、仅该模型域名走代理即成功。
 
 ## 遇到问题？让大模型帮你排查
 
@@ -77,4 +83,12 @@ dsh-llm-proxy: global dispatcher → RetryAgent(RoutingDispatcher) (proxy=127.0.
 4. 检查 dsh web 日志中 dsh-llm-proxy 相关输出。
 
 根据排查结果判断插件是否可用；如不可用，给出全面修复方案。
+```
+
+## 测试
+
+```sh
+npm test                    # 单元测试（路由 + 回退 + 重试镜像等，无网络）
+npm run test:smoke          # 路由端到端（真实 undici + 本地服务器）
+npm run test:smoke:failover # 回退端到端（直连死亡 → 代理重发、负缓存、禁用、流式）
 ```

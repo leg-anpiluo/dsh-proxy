@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.0.1 (2026-09-06)
+
+- **修复：插件卸载后全局 fetch 悬空（teardown）**。`setGlobalDispatcher()` 在 undici 8.x 返回 `undefined`，v2.0.0 的 `previous = setGlobalDispatcher(next)` 因此把 `undefined` 当成了「插件安装前的 dispatcher」：dispose 时 `setGlobalDispatcher(undefined)` 抛 `InvalidArgumentError` 被吞掉，全局 dispatcher 仍指向插件已销毁的栈——宿主进程里之后的**所有** fetch 都会失败，直到重启（插件热重载 / 停用即触发）。现在首次 install 用 `getGlobalDispatcher()` 显式捕获原 dispatcher，teardown 精确还原。
+- **修复：响应已开始后的直连失败不再重放**。直连路径在 `onResponseStart` 之后（流式响应进行到一半）发生传输层失败时，failover 层此前会经代理重发整个请求，导致一次 dispatch 向下游投递**两份**响应（重复 `onResponseStart`/data）。现在与 undici `RetryHandler` 一致，用 `headersSent` 守卫直接传播错误（`lib/failover-dispatcher.js`）。
+- **改进：保存设置不再掐断进行中的流式请求**。被替换的旧 dispatcher 栈改为优雅退役：立即 `close()`（在途请求在旧栈上正常跑完，新请求走新栈），10 分钟宽限期后才强制 `destroy()` 兜底回收卡死的连接。插件卸载（dispose）仍是立即 destroy——此时语义就是「断开」。
+- 新增回归测试：`test/installer.test.js`（teardown 还原原 dispatcher、优雅退役、空 teardown 无副作用）；`test/failover-dispatcher.test.js` 新增「mid-response 失败不回退、下游只收到一份响应生命周期」用例。
+
 ## v2.0.0 (2026-09-06)
 
 - **包更名**：npm 包名从 `@superfish058/dsh-llm-proxy` 改为 `@anpiluo/dsh-proxy`（本仓库 fork 自上游 v1.1.0，安装命令相应变为 `dsh plugin --profile web add @anpiluo/dsh-proxy` 或 `github:leg-anpiluo/dsh-proxy#v2.0.0`；client bundle ID 同步更名，设置卡加载不受影响）。

@@ -1,4 +1,4 @@
-# @anpiluo/dsh-proxy v2.0.0 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
+# @anpiluo/dsh-proxy v2.0.1 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
 #
 # v2.0.0 (direct failover):
 #   failoverEnabled    replay DIRECT-path requests once through the failover

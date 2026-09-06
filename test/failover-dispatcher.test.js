@@ -12,6 +12,8 @@
  *     never fail over;
  *   - when the fallback also fails, downstream sees exactly one error and
  *     the host is NOT cached;
+ *   - a transport failure AFTER the response started is never replayed
+ *     (headersSent guard — one dispatch delivers one response lifecycle);
  *   - failover composes under undici RetryAgent (failover answers transport
  *     errors first; HTTP 429 is left to RetryAgent, never failed over).
  *
@@ -312,6 +314,32 @@ test('fallback failure: exactly one downstream error, host not cached', () => {
   assert.deepEqual(record.map((r) => r.agent), ['direct', 'proxy:http://127.0.0.1:7897'])
   assert.deepEqual(h.events, [['reqStart'], ['reqStart'], ['error', 'ECONNREFUSED']])
   assert.deepEqual(d.negCacheEntries(), [])
+})
+
+test('mid-response failure (after onResponseStart) is never replayed', () => {
+  const record = []
+  const { d } = makeFailover(record, { routerOpts: { directFailHosts: ['api.deepseek.com'] } })
+  // Script the direct agent to START the response downstream and only THEN
+  // die with a transport error (ECONNRESET mid-stream). Replaying would
+  // deliver a SECOND response for one dispatch — the headersSent guard must
+  // propagate instead (same rule undici's RetryHandler applies).
+  const orig = d.router.direct.dispatch.bind(d.router.direct)
+  d.router.direct.dispatch = (opts, handler) => {
+    record.push({ agent: 'direct', origin: opts.origin, host: 'api.deepseek.com' })
+    const c = fakeController()
+    handler.onRequestStart?.(c, undefined)
+    handler.onResponseStart?.(c, 200, { 'content-type': 'text/event-stream' }, 'OK')
+    handler.onResponseData?.(c, 'chunk-1')
+    handler.onResponseError?.(c, Object.assign(new Error('socket reset'), { code: 'ECONNRESET' }))
+    return true
+  }
+  const h = spy()
+  d.dispatch(req('https://api.deepseek.com/v1'), h)
+  // The failover proxy was never touched…
+  assert.deepEqual(record.map((r) => r.agent), ['direct'])
+  // …and downstream sees exactly ONE response lifecycle, then the error.
+  assert.deepEqual(h.events, [['reqStart'], ['respStart', 200], ['data'], ['error', 'ECONNRESET']])
+  assert.equal(h.events.filter((e) => e[0] === 'respStart').length, 1)
 })
 
 test('custom http failoverProxy is a separate agent, used on direct failure', () => {

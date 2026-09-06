@@ -1,6 +1,8 @@
-# @superfish058/dsh-llm-proxy
+# @anpiluo/dsh-proxy
 
-[![npm](https://img.shields.io/npm/v/@superfish058/dsh-llm-proxy)](https://www.npmjs.com/package/@superfish058/dsh-llm-proxy)
+[![npm](https://img.shields.io/npm/v/@anpiluo/dsh-proxy)](https://www.npmjs.com/package/@anpiluo/dsh-proxy)
+
+> Fork 自 [@superfish058/dsh-llm-proxy](https://github.com/superfish058/dsh-llm-proxy)（v1.1.0）。v2.0.0 起新增「直连失败自动回退代理」，由 [@leg-anpiluo](https://github.com/leg-anpiluo) 维护。
 
 DSH 模型代理插件：给请求按「目标域名」分流——选中的模型走代理，其余直连并在**直连失败时自动回退代理**，另带失败自动重试。
 
@@ -33,13 +35,13 @@ DSH 模型代理插件：给请求按「目标域名」分流——选中的模�
 
 ```sh
 # 推荐：npm 包（最新版，预构建 lib，秒装）
-dsh plugin --profile web add @superfish058/dsh-llm-proxy
+dsh plugin --profile web add @anpiluo/dsh-proxy
 
 # 本地源码联调（改源码后需 npm run build 重建）
 dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 ```
 
-若提示 build 授权，把 `@superfish058/dsh-llm-proxy` 加进 profile 的 `pnpm-workspace.yaml` → `onlyBuiltDependencies`。装完重启 `dsh web`（托盘退出 → 启动）。
+若提示 build 授权，把 `@anpiluo/dsh-proxy` 加进 profile 的 `pnpm-workspace.yaml` → `onlyBuiltDependencies`。装完重启 `dsh web`（托盘退出 → 启动）。
 
 ## 配置
 
@@ -75,7 +77,7 @@ dsh-llm-proxy: global dispatcher → RetryAgent(FailoverDispatcher(RoutingDispat
 插件出问题时，可在 DSH 中让其他模型帮忙排查——把下面这段提示词发给模型即可，模型会自行排查，无需用户提供报错信息或执行任何操作：
 
 ```text
-检查当前 DSH 插件 @superfish058/dsh-llm-proxy 是否正常可用，按以下步骤自行排查：
+检查当前 DSH 插件 @anpiluo/dsh-proxy 是否正常可用，按以下步骤自行排查：
 
 1. 查看插件配置确定当前代理端口号，自行通过该端口访问外网（如 github.com 等）判断端口是否连通，并确认本机可访问的端口和域名；
 2. 检查「走代理的模型」是否已勾选；

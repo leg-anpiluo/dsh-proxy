@@ -2,6 +2,7 @@
 
 ## v2.0.0 (2026-09-06)
 
+- **包更名**：npm 包名从 `@superfish058/dsh-llm-proxy` 改为 `@anpiluo/dsh-proxy`（本仓库 fork 自上游 v1.1.0，安装命令相应变为 `dsh plugin --profile web add @anpiluo/dsh-proxy` 或 `github:leg-anpiluo/dsh-proxy#v2.0.0`；client bundle ID 同步更名，设置卡加载不受影响）。
 - **直连失败自动回退（failover）**：未走代理的请求（网络搜索、web_fetch、国内模型 API——一切走全局 fetch 且不在「走代理的模型」里的目标）在直连传输层失败（连接拒绝 / DNS 失败 / 超时 / 连接重置，响应未开始）时，自动经代理重发一次（`lib/failover-dispatcher.js`）。走代理的模型不受影响——它们没有直连路径可回退，主代理挂了错误直接暴露，不会被同一个死代理二次重试。默认开启，回退端点默认复用主代理（`proxyHost:proxyPort`），也可用 `failoverProxy` 指定专用回退地址（支持 `http://`、`https://`、`socks5://`，SOCKS5 走 undici 8 原生 `Socks5ProxyAgent`）。该功能吸收了 dsh-proxy-switch 插件的核心场景，且在 dispatcher 层实现（TLS 校验正常、连接池复用、无手写 body 重放）。
 - **失败主机负缓存（negativeCacheTtlMs）**：某地址直连失败、经代理成功后，在 TTL 窗口内（默认 60s）后续请求直接走代理，不再重复支付直连超时；窗口内一次直连成功即清除条目，直连恢复可自动切回。设为 0 则每次请求都先试直连。
 - **重试分工收窄**：`RetryAgent` 的传输层错误码从 9 个收窄为 `ECONNRESET` / `EPIPE` / `UND_ERR_SOCKET`（连接已建立后的中途断开）；CONNECT 级失败（ECONNREFUSED / ENOTFOUND / 超时等）归 failover 层处理，避免死路径被「重试 3 次 × 回退 1 次」放大锤打。429/5xx 重试语义不变。
@@ -51,7 +52,7 @@
 ## v1.0.4 (2026-08-19)
 
 - npm 发布元数据：新增 `repository` / `publishConfig.access=public` / `author` / `homepage` / `bugs`
-- README 新增 npm 安装方式（`dsh plugin add @superfish058/dsh-llm-proxy`）
+- README 新增 npm 安装方式（`dsh plugin add @anpiluo/dsh-proxy`）
 - 新增 GitHub Actions CI（build + test）
 
 ## v1.0.3 (2026-08-19)

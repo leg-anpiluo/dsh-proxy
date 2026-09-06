@@ -1,4 +1,4 @@
-# @superfish058/dsh-llm-proxy v2.0.0 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
+# @anpiluo/dsh-proxy v2.0.0 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
 #
 # v2.0.0 (direct failover):
 #   failoverEnabled    replay DIRECT-path requests once through the failover
@@ -21,7 +21,7 @@
 # Edit values below, or use the 设置 → 模型代理 page (which also lists the selectable models).
 - insert:
     - id: llm-proxy
-      name: '@superfish058/dsh-llm-proxy'
+      name: '@anpiluo/dsh-proxy'
       config:
         proxyHost: '127.0.0.1'
         proxyPort: 7897

@@ -1,0 +1,38 @@
+# @anpiluo/dsh-proxy — release publish via npm Trusted Publishing (OIDC).
+#
+# No long-lived npm token: the job exchanges the GitHub-issued OIDC token for
+# a short-lived publish credential. Requires the trusted publisher configured
+# on npmjs.com (package → Trusted Publisher → GitHub Actions):
+#   Organization or user: leg-anpiluo
+#   Repository:           dsh-proxy
+#   Workflow filename:    publish.yml
+#   Allowed actions:      check "npm publish" (post-Sep-2026 configs default
+#                         to `npm stage publish` only)
+#
+# Release flow: bump version + CHANGELOG → commit → `git tag vX.Y.Z` →
+# `git push fork master --tags`. npm CLI >= 11.5.1 (node 24 ships it) uses
+# trusted publishing automatically when no token auth is present.
+name: publish
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  id-token: write # OIDC token for npm trusted publishing
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false # never cache release builds
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm publish

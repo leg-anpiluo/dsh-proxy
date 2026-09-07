@@ -301,6 +301,30 @@ test('bridge maps HOST-copy SettingsConflictError to settings-conflict (structur
   assert.equal(result.message, 'stale revision (host copy)')
 })
 
+test('bridge maps code-only conflict markers to settings-conflict (belt-and-suspenders)', async () => {
+  // Absorbed from cross-audit: the official class also carries the stable
+  // class field `code = "SETTINGS_CONFLICT"`. If a future dsh-settings ever
+  // renames the Error class but keeps the wire code (or vice versa), the
+  // mapping must still hold.
+  const base = Config({})
+  const { seam } = makeFakeSeam({ base })
+  seam.mutate = async () => {
+    const codeOnly = new Error('stale revision (code marker only)')
+    throw codeOnly
+  }
+  const handlers = makeBridgeHandlers(seam)
+  const untouched = await handlers.mutate({ ns: 'llm-proxy', ops: [{ op: 'set', path: ['proxyHost'], value: '10.0.0.3' }], expectedRevision: 1 })
+  assert.equal(untouched.code, 'settings-rejected')
+  seam.mutate = async () => {
+    const codeOnly = new Error('stale revision (code marker only)')
+    codeOnly.code = 'SETTINGS_CONFLICT'
+    throw codeOnly
+  }
+  const marked = await handlers.mutate({ ns: 'llm-proxy', ops: [{ op: 'set', path: ['proxyHost'], value: '10.0.0.3' }], expectedRevision: 1 })
+  assert.equal(marked.ok, false)
+  assert.equal(marked.code, 'settings-conflict')
+})
+
 test('bridge routes enforce loopback + POST', async () => {
   const base = Config({})
   const { seam } = makeFakeSeam({ base })

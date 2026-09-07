@@ -6,6 +6,8 @@
 
 DSH 模型代理插件：给请求按「目标域名」分流——选中的模型走代理，其余直连并在**直连失败时自动回退代理**，另带失败自动重试。
 
+> **版本兼容**：客户端设置卡要求宿主 **DSH ≥ 0.1.2-rc.1**（客户端 store 模块 `@deepseek-ai/dsh-client-store`，rc.6/rc.7 的 `dsh-client-runtime` 模块名已废弃）；宿主侧逻辑（`lib/`）兼容 rc.7+。
+
 ## 它是干嘛的
 
 - **按模型走代理**：在 DSH 设置页（插件 → 可配置插件 → 模型代理）勾选需要走代理的模型（如 `deepseek-v4-flash`），该模型的请求自动经 `proxyHost:proxyPort`（默认 `127.0.0.1:7897`，即 Clash）转发；未勾选的模型（DeepSeek、小米、通义等国内 API）保持直连。路由按模型的 **API 地址（baseURL host）** 生效：选中一个模型后，同一地址下的所有模型都会走代理（例如 B.AI 的 `deepseek-v4-flash` 与 `deepseek-v4-flash-vision-exp` 共享 `api.b.ai`）。

@@ -11,7 +11,7 @@
  * (`slots`, `locale`, `settingsScope`, `remote`, `connection`); the bundle
  * purity gate forbids value imports of other @deepseek-ai packages.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { useSyncExternalStore } from 'react'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'

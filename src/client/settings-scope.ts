@@ -11,7 +11,12 @@
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+// Snapshot-store engine: the host web bundle seeds it as the
+// '@deepseek-ai/dsh-client-store' module (DSH ≥ 0.1.2-rc.1; the pre-0.1.2
+// id '@deepseek-ai/dsh-client-runtime/client' no longer exists on the
+// module table). The npm package's exports map has no ./client subpath —
+// the bare specifier is BOTH the build external and the runtime seed id.
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 
 /** Settings namespace owned by the plugin (mirrors lib/settings.js). */
 export const LLM_PROXY_NAMESPACE = 'llm-proxy'

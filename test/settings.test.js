@@ -282,6 +282,25 @@ test('bridge maps seam conflicts to settings-conflict', async () => {
   assert.equal(result.code, 'settings-conflict')
 })
 
+test('bridge maps HOST-copy SettingsConflictError to settings-conflict (structural, not instanceof)', async () => {
+  // The host seam throws ITS OWN dsh-settings copy; a plugin-resolved class
+  // identity never matches across copies. Regression for the duck-typed
+  // failureOf(): any error carrying the official name must map to
+  // settings-conflict regardless of which copy constructed it.
+  const base = Config({})
+  const { seam } = makeFakeSeam({ base })
+  seam.mutate = async () => {
+    const hostCopyError = new Error('stale revision (host copy)')
+    hostCopyError.name = 'SettingsConflictError'
+    throw hostCopyError
+  }
+  const handlers = makeBridgeHandlers(seam)
+  const result = await handlers.mutate({ ns: 'llm-proxy', ops: [{ op: 'set', path: ['proxyHost'], value: '10.0.0.2' }], expectedRevision: 1 })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'settings-conflict')
+  assert.equal(result.message, 'stale revision (host copy)')
+})
+
 test('bridge routes enforce loopback + POST', async () => {
   const base = Config({})
   const { seam } = makeFakeSeam({ base })

@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.0.2 (2026-09-06)
+
+- **修复：客户端设置卡在 DSH ≥ 0.1.2-rc.1 上无法加载**。宿主把客户端快照存储引擎从 `@deepseek-ai/dsh-client-runtime/client` 迁到了新模块 `@deepseek-ai/dsh-client-store`（web bundle 的 seed 模块表：`react` / `react/jsx-runtime` / `react-dom` / `react-dom/client` / `@deepseek-ai/cordis` / `@deepseek-ai/dsh-client-store` / `@deepseek-ai/dsh-client-ui-slots` / `@deepseek-ai/dsh-client-ui-primitives`），旧 id 在 0.1.2-rc.1 上不存在，插件 bundle 运行时 `require` 它会直接 throw——设置卡加载失败。现改从 `@deepseek-ai/dsh-client-store` import（新包的 exports map 没有 `./client` 子路径，必须用裸标识符），重建 `lib/client.js` 后 bundle 的 5 个外部依赖全部落在 seed 表内。`createSnapshotStore` 返回面（`getSnapshot`/`subscribe`/`update`/`set`）两版逐行同构，客户端逻辑零改动。**客户端要求宿主 ≥ 0.1.2-rc.1；宿主半边（dispatcher/桥接）继续兼容 0.1.0-rc.7+。**
+- **修复：`SettingsConflictError` 跨副本失效**。插件 import 自己 node_modules 里的 dsh-settings 副本，宿主 seam 抛的是宿主副本的类——`instanceof` 跨副本永远 false，真冲突会被错映射成 `settings-rejected`。现改为结构化检测（`error.name === 'SettingsConflictError'`，两版实现都显式设置该 name），并移除对 `@deepseek-ai/dsh-settings` 的运行时 import（`settingsNamespace` 同样本地化：同一 kebab-case 正则 `/^[a-z][a-z0-9-]*$/`）。0.1.2-rc.1 已不导出 `settingsNamespace`，这一改动同时消除了未来 npm dedupe 提升副本版本时的加载崩溃风险。新增跨副本回归测试。
+- **pi-ai 目录声明为可选 peer**（`peerDependenciesMeta.optional`）。有意不用 `optionalDependencies`：那会真实安装一份与宿主不同的 pi-ai，模型目录反而可能与官方选择器漂移；可选 peer 只声明契约，运行时继续解析宿主安装的副本（实测 0.84.4 经 `providers/all` exports map 可用）。
+- **CI 补全**：`ci.yml` 增加 `npm run typecheck`、两套端到端 smoke、`externals-check`（外部依赖必须落在宿主模块表内——正是本次 0.1.2 断点的回归门）与 `test:client`；`publish.yml` 发布前加 typecheck。
+- 版本 2.0.2，lock 同步。
+
 ## v2.0.1 (2026-09-06)
 
 - **修复：插件卸载后全局 fetch 悬空（teardown）**。`setGlobalDispatcher()` 在 undici 8.x 返回 `undefined`，v2.0.0 的 `previous = setGlobalDispatcher(next)` 因此把 `undefined` 当成了「插件安装前的 dispatcher」：dispose 时 `setGlobalDispatcher(undefined)` 抛 `InvalidArgumentError` 被吞掉，全局 dispatcher 仍指向插件已销毁的栈——宿主进程里之后的**所有** fetch 都会失败，直到重启（插件热重载 / 停用即触发）。现在首次 install 用 `getGlobalDispatcher()` 显式捕获原 dispatcher，teardown 精确还原。

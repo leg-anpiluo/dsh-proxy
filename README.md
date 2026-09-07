@@ -43,6 +43,14 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 
 若提示 build 授权，把 `@anpiluo/dsh-proxy` 加进 profile 的 `pnpm-workspace.yaml` → `onlyBuiltDependencies`。装完重启 `dsh web`（托盘退出 → 启动）。
 
+## 版本兼容
+
+| 组件 | 要求 | 说明 |
+|---|---|---|
+| 客户端设置卡 | DSH ≥ 0.1.2-rc.1 | 依赖宿主 web 模块表 seed 的 `@deepseek-ai/dsh-client-store`（0.1.2 起替代 `dsh-client-runtime/client`）；旧宿主上设置卡无法加载，宿主半边不受影响 |
+| 宿主半边（dispatcher / 设置桥 / 路由） | DSH ≥ 0.1.0-rc.7 | 纯 Node ESM，经注入的 settings seam 工作，不依赖宿主 dsh-settings 的具体导出 |
+| `@earendil-works/pi-ai` | 可选（peer） | 宿主（dsh-llm-pi-ai）提供时模型目录与官方选择器同步；未提供时目录型 provider 显示占位行 |
+
 ## 配置
 
 | 字段 | 默认 | 说明 |

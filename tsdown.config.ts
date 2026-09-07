@@ -31,8 +31,8 @@ export const PLATFORM_MODULES = [
   '@deepseek-ai/dsh-client-schema-form',
 ] as const
 
-/** Documented runtime exemption: the snapshot-store engine lives in runtime. */
-const RUNTIME_STORE_EXEMPTION = '@deepseek-ai/dsh-client-runtime/client'
+/** Snapshot-store engine, seeded by the shell module table (DSH ≥ 0.1.2-rc.1). */
+const RUNTIME_STORE_EXEMPTION = '@deepseek-ai/dsh-client-store'
 
 /** Externals resolved from the loader module table. */
 export const CLIENT_EXTERNALS: readonly string[] = [...PLATFORM_MODULES, RUNTIME_STORE_EXEMPTION]

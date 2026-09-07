@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy — connection-test unit tests.
+ * dsh-proxy — connection-test unit tests.
  *
  * Covers: target resolution (llm-pi-ai explicit + catalog, llm-deepseek,
  * apiKey inline vs apiKeyEnv), the probe mapping (2xx / 401 / 404 / 429 /
@@ -79,7 +79,7 @@ test('findTestTarget resolves an explicit llm-pi-ai model with an inline key', (
 })
 
 test('findTestTarget resolves apiKeyEnv from the DSH credentials file', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-llm-proxy-cred-'))
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-proxy-cred-'))
   try {
     writeFileSync(join(dir, '.credentials.yaml'), 'version: 1\nrefs:\n  TEST_API_KEY: sk-filekey\n')
     const seam = makeSeam({
@@ -149,7 +149,7 @@ test('findTestTarget resolves llm-deepseek built-in models with default baseURL 
 })
 
 test('findTestTarget resolves llm-deepseek apiKeyEnv from the DSH credentials file', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-llm-proxy-ds-cred-'))
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-proxy-ds-cred-'))
   try {
     // Use a ref absent from the real ~/.dsh/.credentials.yaml so the temp
     // document's directory is the one that supplies the key (the canonical

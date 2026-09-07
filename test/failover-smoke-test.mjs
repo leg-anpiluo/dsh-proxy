@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy v2.0.0 — end-to-end failover smoke test against REAL undici +
+ * dsh-proxy v2.0.0 — end-to-end failover smoke test against REAL undici +
  * real local servers (no mocks, no global dispatcher mutation).
  *
  * Target-host note: the direct target binds 127.0.0.2 — the same convention

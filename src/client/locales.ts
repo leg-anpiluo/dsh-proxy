@@ -7,7 +7,7 @@
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   nav: '模型代理',
-  title: '模型代理（dsh-llm-proxy）',
+  title: '模型代理（dsh-proxy）',
   description: '选中的模型请求走代理并自动重试；直连失败自动回退代理。',
   statusLoading: '加载中…',
   statusUnavailable: '设置服务不可用，无法读取或写入代理配置。',
@@ -57,7 +57,7 @@ export const zh = {
 /** English dictionary, checked complete against the zh key set. */
 export const en: Record<keyof typeof zh, string> = {
   nav: 'Proxy Model',
-  title: 'Proxy Model (dsh-llm-proxy)',
+  title: 'Proxy Model (dsh-proxy)',
   description: 'Selected models route through the proxy with automatic retries; failing direct connections fall back to the proxy.',
   statusLoading: 'Loading…',
   statusUnavailable: 'Settings service unavailable; the proxy configuration cannot be read or written.',

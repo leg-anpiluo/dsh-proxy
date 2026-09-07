@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy v1.0.3 — retry-policy mirroring tests.
+ * dsh-proxy v1.0.3 — retry-policy mirroring tests.
  *
  * The card's `retries`/`retryIntervalMs` must be mirrored into the official
  * per-provider `retryPolicy` (which drives the visible "(retry/maximum)" UI)

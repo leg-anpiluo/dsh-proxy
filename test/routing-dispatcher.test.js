@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy v4 鈥?unit tests for RoutingDispatcher (pure router) and the
+ * dsh-proxy v4 鈥?unit tests for RoutingDispatcher (pure router) and the
  * undici RetryAgent wrapper that provides retry.
  *
  * Routing semantics: loopback hosts always go DIRECT; hosts in the proxied

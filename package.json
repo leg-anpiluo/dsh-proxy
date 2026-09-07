@@ -1,6 +1,6 @@
 {
   "name": "@anpiluo/dsh-proxy",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "DSH 模型代理插件：按模型走代理（Clash 等）+ 失败自动重试 + 直连失败自动回退代理，设置页实时生效。",
   "author": "anpiluo",
   "repository": {

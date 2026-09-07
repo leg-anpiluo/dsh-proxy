@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy — browser half. Registers the 模型代理 plugin card inside
+ * dsh-proxy — browser half. Registers the 模型代理 plugin card inside
  * 设置 → 插件 → 可配置插件 via the `settings.plugin.item` slot (declared at
  * runtime by @deepseek-ai/dsh-client-ui-settings-plugins), whose card shows
  * the configurable proxy-model form. Data rides the llm-proxy settings scope,
@@ -48,7 +48,7 @@ export const inject = ['slots', 'locale', 'settingsScope', 'remote']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-llm-proxy: copy dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-proxy: copy dictionaries')
 
   const binder = new LlmProxySettingsBinder(ctx)
   const scope: ProxyModelScope = binder.bind()

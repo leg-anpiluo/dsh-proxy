@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy v4 — end-to-end smoke test against REAL undici + local servers.
+ * dsh-proxy v4 — end-to-end smoke test against REAL undici + local servers.
  *
  * Routing semantics under test:
  *   127.0.0.1 → NOT in proxiedHosts → direct server

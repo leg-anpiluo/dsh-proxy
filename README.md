@@ -77,10 +77,10 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 **日志方式**：重启后日志出现：
 
 ```
-dsh-llm-proxy: global dispatcher → RetryAgent(FailoverDispatcher(RoutingDispatcher)) (proxy=127.0.0.1:7897, proxiedHosts=[...], retries=3×1000ms, failover=on (main-proxy), negCacheTtl=60000ms)
+dsh-proxy: global dispatcher → RetryAgent(FailoverDispatcher(RoutingDispatcher)) (proxy=127.0.0.1:7897, proxiedHosts=[...], retries=3×1000ms, failover=on (main-proxy), negCacheTtl=60000ms)
 ```
 
-直连失败触发回退时，日志出现 `dsh-llm-proxy: direct → <host> failed (<错误码>) — retrying via main-proxy failover proxy`。模型选择器里选中代理模型，流式响应正常、仅该模型域名走代理即成功。
+直连失败触发回退时，日志出现 `dsh-proxy: direct → <host> failed (<错误码>) — retrying via main-proxy failover proxy`。模型选择器里选中代理模型，流式响应正常、仅该模型域名走代理即成功。
 
 ## 遇到问题？让大模型帮你排查
 
@@ -92,7 +92,7 @@ dsh-llm-proxy: global dispatcher → RetryAgent(FailoverDispatcher(RoutingDispat
 1. 查看插件配置确定当前代理端口号，自行通过该端口访问外网（如 github.com 等）判断端口是否连通，并确认本机可访问的端口和域名；
 2. 检查「走代理的模型」是否已勾选；
 3. 检查已勾选模型能否连通（可通过设置页「测试连接」验证）；
-4. 检查 dsh web 日志中 dsh-llm-proxy 相关输出。
+4. 检查 dsh web 日志中 dsh-proxy 相关输出。
 
 根据排查结果判断插件是否可用；如不可用，给出全面修复方案。
 ```

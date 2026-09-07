@@ -1,4 +1,10 @@
-# @anpiluo/dsh-proxy v2.0.1 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
+# @anpiluo/dsh-proxy v2.0.3 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
+#
+# v2.0.3: loader entry id renamed 'llm-proxy' → 'dsh-proxy'. The old id
+# collided with the upstream @superfish058/dsh-llm-proxy (same explicit id)
+# when both packages were installed — "duplicate loader entry id". The
+# settings NAMESPACE stays 'llm-proxy' on purpose: it is the persistence key
+# for saved settings (renaming it would orphan user config).
 #
 # v2.0.0 (direct failover):
 #   failoverEnabled    replay DIRECT-path requests once through the failover
@@ -20,7 +26,7 @@
 #
 # Edit values below, or use the 设置 → 模型代理 page (which also lists the selectable models).
 - insert:
-    - id: llm-proxy
+    - id: dsh-proxy
       name: '@anpiluo/dsh-proxy'
       config:
         proxyHost: '127.0.0.1'

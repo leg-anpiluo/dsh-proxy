@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy v4 — host-side settings wiring + bridge tests.
+ * dsh-proxy v4 — host-side settings wiring + bridge tests.
  *
  * Covers: settings-namespace registration and live re-apply (watch), the
  * fallback when no settings seam exists, the loopback-only bridge
@@ -142,7 +142,7 @@ const DEEPSEEK_NAMESPACE = {
 }
 
 test('plugin exports name and Config schema', () => {
-  assert.equal(name, 'dsh-llm-proxy')
+  assert.equal(name, 'dsh-proxy')
   assert.equal(typeof Config, 'function')
 })
 

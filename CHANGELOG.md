@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.0.3 (2026-09-07)
+
+- **修复：与上游包并存时启动崩溃**（`duplicate loader entry id: llm-proxy`）。根因：`cordis.patch.yml` 显式声明 loader entry `id: llm-proxy`，而同源的上游 `@superfish058/dsh-llm-proxy` 用同一 id——两个包同时装在 profile 时 insert 条目撞车，`dsh web` 无法启动。**loader entry id 改为 `dsh-proxy`**（与 npm 包名对齐）。
+- **cordis 插件名同步更名**：`export const name` `dsh-llm-proxy` → `dsh-proxy`；全部日志前缀、设置卡标题、README 示例同步；桥接路由随迁为 `/api/dsh-proxy/settings`（宿主侧与客户端 bundle 同步更名，内部 API）。
+- **刻意不变**：settings namespace 仍是 `llm-proxy`——它是已保存配置的持久化键，改名会让现有用户设置失效。
+- 已知注意：改 id 后与上游包**并存仍不被支持**——loader 不再冲突，但两个插件会各自注入全局 dispatcher（代理链叠加）。两者只应装一个。
+
 ## v2.0.2 (2026-09-06)
 
 - **修复：客户端设置卡在 DSH ≥ 0.1.2-rc.1 上无法加载**。宿主把客户端快照存储引擎从 `@deepseek-ai/dsh-client-runtime/client` 迁到了新模块 `@deepseek-ai/dsh-client-store`（web bundle 的 seed 模块表：`react` / `react/jsx-runtime` / `react-dom` / `react-dom/client` / `@deepseek-ai/cordis` / `@deepseek-ai/dsh-client-store` / `@deepseek-ai/dsh-client-ui-slots` / `@deepseek-ai/dsh-client-ui-primitives`），旧 id 在 0.1.2-rc.1 上不存在，插件 bundle 运行时 `require` 它会直接 throw——设置卡加载失败。现改从 `@deepseek-ai/dsh-client-store` import（新包的 exports map 没有 `./client` 子路径，必须用裸标识符），重建 `lib/client.js` 后 bundle 的 5 个外部依赖全部落在 seed 表内。`createSnapshotStore` 返回面（`getSnapshot`/`subscribe`/`update`/`set`）两版逐行同构，客户端逻辑零改动。**客户端要求宿主 ≥ 0.1.2-rc.1；宿主半边（dispatcher/桥接）继续兼容 0.1.0-rc.7+。**

@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy v2.0.1 — regression tests for the global-dispatcher installer.
+ * dsh-proxy v2.0.1 — regression tests for the global-dispatcher installer.
  *
  * The published 2.0.0 shipped a teardown bug: undici's `setGlobalDispatcher()`
  * returns undefined, so the old `previous = setGlobalDispatcher(next)` capture

@@ -1,5 +1,5 @@
 /**
- * rc.6-compatible settings scope for dsh-llm-proxy.
+ * rc.6-compatible settings scope for dsh-proxy.
  *
  * rc.6 host-apiproxy serves only a hard-coded namespace allowlist, so the
  * official settings scope answers "unavailable" for the `llm-proxy`
@@ -7,7 +7,7 @@
  * namespace ready the wrapper is a pass-through; when it reports
  * unavailable, a same-origin bridge controller takes over and serves the
  * same SettingsScope contract from this package's host-side bridge routes
- * (/api/dsh-llm-proxy/settings). The Host keeps the bridge loopback-only.
+ * (/api/dsh-proxy/settings). The Host keeps the bridge loopback-only.
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
@@ -22,7 +22,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 export const LLM_PROXY_NAMESPACE = 'llm-proxy'
 
 /** Bridge route prefix (same-origin, loopback-only). */
-const SETTINGS_BRIDGE_PREFIX = '/api/dsh-llm-proxy/settings'
+const SETTINGS_BRIDGE_PREFIX = '/api/dsh-proxy/settings'
 
 /** The snapshot shape the proxy-model section consumes. */
 export interface ProxyModelSnapshot {
@@ -459,7 +459,7 @@ export class LlmProxySettingsBinder extends Service {
         for (const dispose of disposers) dispose()
         void scope.dispose()
       }
-    }, 'dsh-llm-proxy: compat scope invalidation')
+    }, 'dsh-proxy: compat scope invalidation')
     return scope
   }
 }

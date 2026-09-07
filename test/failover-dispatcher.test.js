@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy v2.0.0 — unit tests for FailoverDispatcher.
+ * dsh-proxy v2.0.0 — unit tests for FailoverDispatcher.
  *
  * Semantics under test (all with a fake undici shim, no real network):
  *   - direct success passes through untouched;

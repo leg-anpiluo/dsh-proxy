@@ -1,5 +1,5 @@
 /**
- * dsh-llm-proxy v1.0.9 — multimodal mirroring tests.
+ * dsh-proxy v1.0.9 — multimodal mirroring tests.
  *
  * The card's independent 多模态模型 section lists models to advertise as
  * accepting image input. DSH refuses image-bearing requests unless the owning

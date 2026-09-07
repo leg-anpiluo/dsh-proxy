@@ -6,6 +6,7 @@
 - **修复：`SettingsConflictError` 跨副本失效**。插件 import 自己 node_modules 里的 dsh-settings 副本，宿主 seam 抛的是宿主副本的类——`instanceof` 跨副本永远 false，真冲突会被错映射成 `settings-rejected`。现改为结构化检测（`error.name === 'SettingsConflictError'`，两版实现都显式设置该 name），并移除对 `@deepseek-ai/dsh-settings` 的运行时 import（`settingsNamespace` 同样本地化：同一 kebab-case 正则 `/^[a-z][a-z0-9-]*$/`）。0.1.2-rc.1 已不导出 `settingsNamespace`，这一改动同时消除了未来 npm dedupe 提升副本版本时的加载崩溃风险。新增跨副本回归测试。
 - **pi-ai 目录声明为可选 peer**（`peerDependenciesMeta.optional`）。有意不用 `optionalDependencies`：那会真实安装一份与宿主不同的 pi-ai，模型目录反而可能与官方选择器漂移；可选 peer 只声明契约，运行时继续解析宿主安装的副本（实测 0.84.4 经 `providers/all` exports map 可用）。
 - **CI 补全**：`ci.yml` 增加 `npm run typecheck`、两套端到端 smoke、`externals-check`（外部依赖必须落在宿主模块表内——正是本次 0.1.2 断点的回归门）与 `test:client`；`publish.yml` 发布前加 typecheck。
+- 已知噪音（不入合并前置）：`lib/client.js` 的 `//#region` 折叠注释含构建机绝对路径（tsdown CSS 模块虚拟 id 的固有行为），换机器重建会产生一行注释 diff；非运行时代码，不影响功能。
 - 版本 2.0.2，lock 同步。
 
 ## v2.0.1 (2026-09-06)

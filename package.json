@@ -79,11 +79,14 @@
     "@deepseek-ai/schemastery": "^3.18.1",
     "undici": "^8.10.0"
   },
-  "optionalDependencies": {
-    "@earendil-works/pi-ai": "^0.84.0"
-  },
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.0 <5.0.0"
+    "@deepseek-ai/cordis": ">=4.0.0 <5.0.0",
+    "@earendil-works/pi-ai": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-ai": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

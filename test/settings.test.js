@@ -282,6 +282,51 @@ test('bridge maps seam conflicts to settings-conflict', async () => {
   assert.equal(result.code, 'settings-conflict')
 })
 
+test('bridge maps HOST-copy conflicts by structure, not instanceof', async () => {
+  // The host seam throws ITS OWN dsh-settings copy; a plugin-resolved class
+  // identity never matches across copies. Regression for the duck-typed
+  // failureOf(): any error carrying the official name/code must map to
+  // settings-conflict regardless of which copy constructed it.
+  const base = Config({})
+  const { seam } = makeFakeSeam({ base })
+  seam.mutate = async () => {
+    const hostCopyError = new Error('stale revision (host copy)')
+    hostCopyError.name = 'SettingsConflictError'
+    throw hostCopyError
+  }
+  const handlers = makeBridgeHandlers(seam)
+  const result = await handlers.mutate({
+    ns: 'llm-proxy',
+    ops: [{ op: 'set', path: ['proxyHost'], value: '10.0.0.2' }],
+    expectedRevision: 1,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'settings-conflict')
+  assert.equal(result.message, 'stale revision (host copy)')
+})
+
+test('bridge maps conflict-coded errors by structure, not instanceof', async () => {
+  // Same duck-typed check on the stable `code` field: a host copy that only
+  // carries `code = "SETTINGS_CONFLICT"` (class field, set on both sides)
+  // must also map to settings-conflict.
+  const base = Config({})
+  const { seam } = makeFakeSeam({ base })
+  seam.mutate = async () => {
+    const coded = new Error('stale revision (coded)')
+    coded.code = 'SETTINGS_CONFLICT'
+    throw coded
+  }
+  const handlers = makeBridgeHandlers(seam)
+  const result = await handlers.mutate({
+    ns: 'llm-proxy',
+    ops: [{ op: 'set', path: ['proxyHost'], value: '10.0.0.3' }],
+    expectedRevision: 1,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'settings-conflict')
+  assert.equal(result.message, 'stale revision (coded)')
+})
+
 test('bridge routes enforce loopback + POST', async () => {
   const base = Config({})
   const { seam } = makeFakeSeam({ base })

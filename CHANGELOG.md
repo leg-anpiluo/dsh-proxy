@@ -5,7 +5,7 @@
 - **修复：客户端设置卡在 DSH ≥ 0.1.2-rc.1 上加载失败（store 模块更名）**。宿主 rc.1 起客户端 store 引擎包名从 `@deepseek-ai/dsh-client-runtime` 改为 `@deepseek-ai/dsh-client-store`，插件客户端 bundle 此前以旧模块 id 作为 external（`src/client/settings-scope.ts` / `tsdown.config.ts`），在新宿主上 `require` 解析不到而整体加载失败。现改为 `@deepseek-ai/dsh-client-store`（API 同构：`createSnapshotStore(init, opts)` 返回 `{getSnapshot, subscribe, update, set}`），devDep 与 `test/externals-check.mjs` 的平台模块表同步更新，`lib/client.js` 已重建提交。
 - **修复：`ClientContext` 类型来源去依赖**。`src/client/index.ts` 的类型导入从已废弃的 `@deepseek-ai/dsh-client-runtime/client` 改为宿主稳定的 `@deepseek-ai/cordis`（与官方 dsh-client-locale 同款写法）。
 - **修复：`settingsNamespace` 跨版本依赖移除（C）**。宿主 `@deepseek-ai/dsh-settings` 在 0.1.2-rc.1 移除了 `settingsNamespace` 导出（改内部 `parseSettingsNamespace`），而本插件声明的 `^0.1.0-rc.7` 范围在宿主发正式版后可能被 npm dedupe 提升到宿主版本导致 `SyntaxError`。现改为本地 kebab-case 校验（正则与宿主逐字节一致），`SettingsConflictError` 冲突识别改 duck-typing（`name`/`code` 双判，跨依赖副本 `instanceof` 恒 false 的问题一并消除）。
-- **改进：pi-ai 目录依赖显式声明（F）**。`catalog.js` 动态导入 `@earendil-works/pi-ai/providers/all`，此前未在 `package.json` 声明，纯靠宿主恰好安装才能解析；现声明为 `optionalDependencies`，宿主未装时静默降级行为不变。
+- **改进：pi-ai 目录依赖显式声明（F）**。`catalog.js` 动态导入 `@earendil-works/pi-ai/providers/all`，此前未在 `package.json` 声明，纯靠宿主恰好安装才能解析；现声明为**可选 peer 依赖**（`peerDependencies[].optional`），只声明契约、不真实安装副本——运行时继续解析宿主 dsh-llm-pi-ai 的 pi-ai 实例，避免插件自带副本与官方模型选择器漂移。宿主未装时静默降级行为不变。
 - **改进：CI 补全验证（F）**。`.github/workflows/ci.yml` 在 `npm test` 之外新增 `npm run typecheck`、`npm run test:smoke`、`npm run test:smoke:failover`，覆盖此前不在 CI 的类型检查与两套端到端测试。
 - README 顶部新增版本兼容声明：客户端要求宿主 ≥ 0.1.2-rc.1，宿主侧逻辑兼容 rc.7+。
 

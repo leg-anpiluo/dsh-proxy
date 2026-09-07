@@ -2,7 +2,9 @@
 
 [![npm](https://img.shields.io/npm/v/@anpiluo/dsh-proxy)](https://www.npmjs.com/package/@anpiluo/dsh-proxy)
 
-> Fork 自 [@superfish058/dsh-llm-proxy](https://github.com/superfish058/dsh-llm-proxy)（v1.1.0）。v2.0.0 起新增「直连失败自动回退代理」，由 [@leg-anpiluo](https://github.com/leg-anpiluo) 维护。
+> Fork 自 [@superfish058/dsh-llm-proxy](https://github.com/superfish058/dsh-llm-proxy)（v1.1.0）。
+>
+> 支持 DSH 0.1.2-rc.1，新增「直连失败自动回退代理」（参考[@sg88/dsh-proxy-switch](https://github.com/sg88/dsh-proxy-switch)），~~由 [@leg-anpiluo](https://github.com/leg-anpiluo) 维护。~~ ~~并不会维护~~ 
 
 DSH 模型代理插件：给请求按「目标域名」分流——选中的模型走代理，其余直连并在**直连失败时自动回退代理**，另带失败自动重试。
 

@@ -14,3 +14,7 @@ const PLATFORM = new Set([
 const unknown = unique.filter((x) => !PLATFORM.has(x))
 console.log('---')
 console.log(unknown.length === 0 ? 'ALL EXTERNALS ARE MODULE-TABLE ENTRIES ✓' : `UNKNOWN EXTERNALS: ${unknown.join(', ')}`)
+// The gate must be able to fail: without a nonzero exit, CI would sail
+// through a bundle that requires a module the host no longer seeds —
+// exactly the 0.1.2-rc.1 breakage this check exists to catch.
+if (unknown.length > 0) process.exitCode = 1

@@ -13,11 +13,16 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+// Namespace import on purpose: the chevron's export name differs between host
+// generations, so the icon is looked up as a property (chevron.tsx) instead of
+// being bound by name — a named import of the wrong generation is `undefined`
+// at runtime and renders as "Element type is invalid".
+import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls the ui-settings-plugins SlotMap merge (the
 // 'settings.plugin.item' entry the configurable tab declares at runtime).
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
+import { pickChevronIcon } from './chevron.tsx'
 import type {
   FieldWrite, ProxyModelRow, ProxyModelScope, ProxyModelSnapshot, TestResult,
 } from './settings-scope.ts'
@@ -56,6 +61,12 @@ export type ProxyModelCardProps =
     /** Host-supplied `{ state, mutate }` projection for the page view. */
     form?: unknown
   }
+
+/**
+ * The card's disclosure glyph, resolved once against the host's primitives
+ * build (the export name differs between host generations — see chevron.tsx).
+ */
+const ChevronDown = pickChevronIcon(primitives)
 
 /** The resolved llm-proxy config shape (mirrors lib/index.js Config). */
 interface ProxyConfig {
@@ -659,7 +670,7 @@ export function ProxyModelCard(props: ProxyModelCardProps): ReactNode {
           <span className={styles.name}>{t('title')}</span>
           <span className={styles.description}>{t('description')}</span>
         </span>
-        <IconChevronDownOutline14 className={styles.chevron + (open ? ` ${styles.chevronOpen}` : '')} />
+        <ChevronDown className={styles.chevron + (open ? ` ${styles.chevronOpen}` : '')} />
       </button>
       {open && <CardBody scope={scope} useSnapshot={useSnapshot} t={t} />}
     </li>

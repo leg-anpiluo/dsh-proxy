@@ -31,7 +31,7 @@
     "prepare": "tsdown",
     "build:watch": "tsdown --watch",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/routing-dispatcher.test.js test/failover-dispatcher.test.js test/installer.test.js test/settings.test.js test/retry-mirror.test.js test/multimodal-mirror.test.js test/connection-test.test.js test/volatile-settings.test.js",
+    "test": "node --test test/routing-dispatcher.test.js test/failover-dispatcher.test.js test/installer.test.js test/settings.test.js test/retry-mirror.test.js test/multimodal-mirror.test.js test/connection-test.test.js test/volatile-settings.test.js test/client-chevron.test.js",
     "test:client": "node test/client-build.test.js && node test/client-shape-check.mjs",
     "test:smoke": "node test/smoke-test.mjs",
     "test:load": "node test/load-test.mjs",

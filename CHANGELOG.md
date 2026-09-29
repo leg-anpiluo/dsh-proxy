@@ -13,7 +13,13 @@
 - **与官方 `@deepseek-ai/dsh-http-proxy` 协作（不再旁路宿主出站策略）**。宿主自 0.1.3 起在插件加载前就装好官方全局 dispatcher（读 `HTTP_PROXY`/`HTTPS_PROXY`）。插件此前用私有 `Agent` 承接**直连**路径，等于静默丢弃部署自身的出站策略。现直连路径**链接**到被自己替换掉的宿主 dispatcher（借用语义：绝不被 close/destroy），插件只接管「走代理的模型」的 host。fork 特有的**直连失败回退 + 负缓存**保持不变（未采用上游 v1.4.0「把策略交给官方层、去掉自身引擎」的做法，那会丢失回退能力）。
 - 合并上游 v1.3.0 两项：`trustedOrigins` 反向代理白名单（新增同名 Config 字段，桥接仍强制同源校验，支持 getter 以便热更新生效）；`normalizeProxyEndpoint`（`proxyHost` 接受整条 URL，不再拼出 `http://http://host:7897`）。
 - **多模态镜像在 DSH ≥ 0.1.7 主动让位**：官方模型设置页自己拥有 `inputModalities`，两个写者会互相覆盖；新宿主上镜像停用并打一行日志（`owns model input modalities`），≤ 0.1.6 行为完全不变。
-- 测试：新增 `test/volatile-settings.test.js`（新宿主路径 4 例：live accessor 解包、seam 适配、apply 装/热更新/镜像让位、describe 抛错回落）；`test/routing-dispatcher.test.js` 补端点归一化与「借用 dispatcher 不被关闭」3+3 例；`test/settings.test.js` 补 `trustedOrigins` 信任与同源护栏用例。`test/client-shape-check.mjs` 修正早已过时的 bundle id 断言并补新版槽位/服务断言，且接入 `npm run test:client`（CI 现在会跑）。
+- **第三方评审追加修复（同版本发布前折入）**：
+  - **`normalizeProxyEndpoint` 的裸 `host:port` 双端口 bug**。此前只有带 scheme 的分支走 `URL` 解析，于是从代理客户端复制出来的 `10.0.0.9:1080` 被拼成 `http://10.0.0.9:1080:7897`（`[::1]:1080` 同样），也就是**每个经代理的请求都打不通**——而这恰好是该 helper 存在的意义所在的粘贴形式（原有 4 个用例只覆盖裸 host / 完整 URL / socks5，漏了这一类）。现三种形状统一走 `URL` 解析：内嵌端口优先于配置端口，方括号 IPv6 正确保留。
+  - **`proxyHost` 填 socks5 会装错 agent**。undici 的 `ProxyAgent`（只会 HTTP CONNECT）**接受** socks5 URL 且构造时不报错，因此 `socks5://…` 会装上一个人为「配置成功」、却在**每个请求时**才失败的代理——静默且难查。现按 scheme 分派：`socks5:`/`socks:` → `Socks5ProxyAgent`（与 `failoverProxy` 既有做法一致，README 里 socks5 的说法这才成立），其余 → `ProxyAgent`；undici 副本不导出 `Socks5ProxyAgent` 时明确 warn 并停用代理，不装坏 agent。
+  - **新槽位的 summary 渲染此前吐出了整张交互卡片**。DSH ≥ 0.1.7 的插件页对同一槽渲染三次：列表行描述与详情页头部各一次 `{ view: 'summary' }`、详情页主体一次 `{ view: 'page', form }`。此前一律输出 `<li>` + 折叠按钮，结果是宿主列表项里再套一层 `<li>`，且点击它只展开表单、丢掉宿主的打开动作。现 `view: 'summary'` 渲染为**内联一行摘要**（`端点 · N 个模型走代理`，未就绪时回落静态说明），只有 page 视图与 ≤ 0.1.6 的 keyed 槽位渲染卡片。宿主 page 视图附带的 `form` 是 `{ state, mutate }` **投影**（无 subscribe/set/unset），故绑定仍由插件自己经 `configForms` 完成（可订阅 + set/unset/recover）。
+  - **设置文档绑定时机（时序敏感）**。`ctx.get()` 无法区分「服务未提供」与「provider fiber 尚未激活」，此前在 `apply()` 里就绑定：若 `configForms` 的 provider 稍后激活，会话会静默锁到回环桥。现改为在**槽位声明回调里**懒绑定——声明该槽的包此时必然已就绪，且仍早于任何渲染。
+  - 复核结论（不改代码）：评审提到的「`socks5` 会在 ProxyAgent 构造时抛」经实测**不成立**（构造正常、请求时才失败，故按上面第 2 条处理）；`failoverProxy` 的 socks5 路径本就正确。
+- 测试：新增 `test/volatile-settings.test.js`（新宿主路径 4 例：live accessor 解包、seam 适配、apply 装/热更新/镜像让位、describe 抛错回落）；`test/routing-dispatcher.test.js` 补端点归一化与「借用 dispatcher 不被关闭」3+3 例，并新增裸 `host:port`、方括号 IPv6、socks5 走到 SOCKS agent（含真实 dispatch 归属）4 例；`test/settings.test.js` 补 `trustedOrigins` 信任与同源护栏用例。`test/client-shape-check.mjs` 修正早已过时的 bundle id 断言并补新版槽位/服务/summary 视图/懒绑定断言，且接入 `npm run test:client`（CI 现在会跑）。全套 100/100。
 - 依赖：`@deepseek-ai/schemastery` `^3.18.1` → `^3.18.4`（`Schema#volatile` 的起始版本）。
 - 版本 2.1.0（minor：新增配置项 + 宿主适配；无破坏性 API 变更——两代宿主同一份产物）。lock 同步。
 

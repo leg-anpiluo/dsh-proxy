@@ -15,6 +15,12 @@ const checks = {
   'entry id dsh-proxy': s.includes('"dsh-proxy"'),
   'bridge prefix': s.includes('/api/dsh-proxy/settings'),
   'locale zh keys': s.includes('模型代理'),
+  // plugins.item renders three times per host: the two summary renderings must
+  // stay inline (no <li>), so the bundle has to branch on the render subject.
+  'summary view handled': s.includes('"summary"') && s.includes('proxy-model-summary'),
+  'summary copy present': s.includes('个模型走代理'),
+  // The settings document is bound from the slot callback, not during apply().
+  'scope bound lazily': /bound\s*\?\?=/.test(s) || s.includes('??='),
 }
 let fail = false
 for (const [name, ok] of Object.entries(checks)) {

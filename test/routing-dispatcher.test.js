@@ -54,7 +54,26 @@ function makeUndici(record) {
       return true
     }
   }
-  return { Agent: FakeAgent, ProxyAgent: FakeProxyAgent }
+  // undici 8.x exports Socks5ProxyAgent; the router must pick it for a socks5
+  // endpoint (its HTTP CONNECT ProxyAgent accepts the URL but cannot speak it).
+  class FakeSocks5ProxyAgent extends FakeAgent {
+    constructor(uriOrOpts) {
+      const uri = typeof uriOrOpts === 'string' ? uriOrOpts : uriOrOpts?.uri
+      if (typeof uri !== 'string' || !/^socks5?:\/\/[^/\s]+(:\d+)?$/.test(uri)) {
+        throw new Error('Invalid URL')
+      }
+      super()
+      this.name = `socks5:${uri}`
+      this.uri = uri
+    }
+    dispatch(opts, handler) {
+      record.push({ agent: `socks5:${this.uri}`, origin: opts.origin, host: opts.host })
+      handler?.onResponseStart?.(200, {}, 'OK', opts.origin)
+      handler?.onResponseEnd?.(null, {})
+      return true
+    }
+  }
+  return { Agent: FakeAgent, ProxyAgent: FakeProxyAgent, Socks5ProxyAgent: FakeSocks5ProxyAgent }
 }
 
 function req(origin, signal) {
@@ -331,9 +350,37 @@ test('a pasted proxy URL is not double-schemed', () => {
   assert.equal(d.proxyPort, 1080)
 })
 
-test('a socks5 endpoint keeps its scheme and the configured port', () => {
+test('a pasted host:port is split instead of double-ported', () => {
+  // The copy-paste shape this helper exists for: without the scheme-less
+  // branch this built `http://10.0.0.9:1080:7897` — a dead proxy for every
+  // request. The embedded port must win over the configured one.
+  const d = makeDispatcher([], { proxyHost: '10.0.0.9:1080', proxyPort: 7897, proxyHosts: ['api.b.ai'] })
+  assert.equal(d.proxyEndpoint, 'http://10.0.0.9:1080')
+  assert.equal(d.proxy.uri, 'http://10.0.0.9:1080')
+  assert.equal(d.proxyHost, '10.0.0.9')
+  assert.equal(d.proxyPort, 1080)
+})
+
+test('a bracketed IPv6 host:port keeps its brackets and port', () => {
+  const d = makeDispatcher([], { proxyHost: '[::1]:1080', proxyPort: 7897, proxyHosts: ['api.b.ai'] })
+  assert.equal(d.proxyEndpoint, 'http://[::1]:1080')
+  assert.equal(d.proxyHost, '[::1]')
+  assert.equal(d.proxyPort, 1080)
+})
+
+test('a socks5 endpoint builds the SOCKS agent, not the HTTP CONNECT one', () => {
   const d = makeDispatcher([], { proxyHost: 'socks5://10.0.0.9', proxyPort: 1080, proxyHosts: ['api.b.ai'] })
   assert.equal(d.proxyEndpoint, 'socks5://10.0.0.9:1080')
+  assert.equal(d.proxy.name, 'socks5:socks5://10.0.0.9:1080')
+})
+
+test('a socks5 endpoint routes proxied hosts through the SOCKS agent', () => {
+  const record = []
+  const d = makeDispatcher(record, {
+    proxyHost: 'socks5://10.0.0.9:1080', proxyPort: 1080, proxyHosts: ['api.b.ai'],
+  })
+  d.dispatch(req('https://api.b.ai'), {})
+  assert.equal(record[0].agent, 'socks5:socks5://10.0.0.9:1080')
 })
 
 // --- Borrowed direct dispatcher (official dsh-http-proxy cooperation) ---------

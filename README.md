@@ -61,7 +61,7 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
-| `proxyHost` / `proxyPort` | `127.0.0.1:7897` | 代理地址（Clash 等），可不在本机。`proxyHost` 也接受整条 URL（`http://10.0.0.9:1080`、`socks5://host`），scheme 与端口会一并采用 |
+| `proxyHost` / `proxyPort` | `127.0.0.1:7897` | 代理地址（Clash 等），可不在本机。`proxyHost` 也接受整条 URL（`http://10.0.0.9:1080`、`socks5://host`）或裸 `host:port`，scheme 与内嵌端口会一并采用（socks5 走 SOCKS agent） |
 | `proxiedModels` | `[]` | 走代理的模型，`<providerId>/<modelId>`，其余直连 |
 | `multimodalModels` | `[]` | 多模态镜像（**仅 DSH ≤ 0.1.6**）：勾选**支持图像识别但官方声明/UI 没有图像输入入口**的模型（如 `deepseek-v4-flash-vision-exp`），插件在所属 provider 声明中标记支持图片输入（pi-ai 写 `input`、官方 DeepSeek 写 `inputModalities`），发图不再被 DSH 拒绝；纯文本模型（如 `deepseek-v4-flash`）勾选无意义；取消勾选自动还原。DSH ≥ 0.1.7 上由官方模型设置页接管，此字段失效 |
 | `retries` / `retryIntervalMs` | `3` / `1000` | 失败重试次数与间隔（ms） |

@@ -76,18 +76,26 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-proxy: copy dictionaries')
 
   const binder = new LlmProxySettingsBinder(ctx)
-  const scope: ProxyModelScope = binder.bind()
+  // The scope is bound lazily, from the slot callbacks below rather than here.
+  // `ctx.get()` returns undefined both when a service is missing *and* when its
+  // provider fiber has not activated yet, so binding during apply() could pin
+  // the session to the loopback bridge even on a host that does provide
+  // `configForms`. A slot declaration is the first moment the package that
+  // declares it is provably up, and it still precedes any render.
+  let bound: ProxyModelScope | undefined
+  const resolveScope = (): ProxyModelScope => (bound ??= binder.bind())
   const useSnapshot = (): ReturnType<ProxyModelScope['getSnapshot']> =>
-    useSyncExternalStore(scope.subscribe, scope.getSnapshot)
+    useSyncExternalStore(resolveScope().subscribe, resolveScope().getSnapshot)
   // Registration-time copy and the inject face share one bound translate;
   // copy freshness rides the locale revision.
   const t = ctx.locale.bind(NS) as ProxyModelCardInjected['t']
-  const injected = (): ProxyModelCardInjected => ({ scope, useSnapshot, t })
+  const injected = (): ProxyModelCardInjected => ({ scope: resolveScope(), useSnapshot, t })
 
   // dsh ≤ 0.1.6: keyed slot. The key is the registered settings NAMESPACE
   // (`llm-proxy`), which is deliberately not the Loader entry id — rc.7
   // dispatches this slot by namespace key (no list ordering).
   ctx.slots.inject('settings.plugin.item', function* () {
+    resolveScope()
     yield ctx.slots.register({
       name: 'settings.plugin.item',
       key: LLM_PROXY_NAMESPACE,
@@ -100,6 +108,7 @@ export function apply(ctx: ClientContext): void {
   // the settings document under. `order` 50 keeps this third-party page after
   // the built-in ones (shell 10, agent-loop 20, subagent 30, web-search 40).
   ctx.slots.inject('plugins.item', function* () {
+    resolveScope()
     yield ctx.slots.register({
       name: 'plugins.item',
       id: LLM_PROXY_ENTRY_ID,

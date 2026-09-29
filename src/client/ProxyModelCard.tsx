@@ -34,10 +34,28 @@ export interface ProxyModelCardInjected {
   t: (key: keyof typeof en) => string
 }
 
-/** Props delivered by the slot outlet (inject face spread flat). */
+/**
+ * Props delivered by the slot outlet (inject face spread flat).
+ *
+ * Two hosts deliver this card: dsh ≤ 0.1.6 sends the keyed
+ * `settings.plugin.item` props (no subject — the card *is* the row), while
+ * dsh ≥ 0.1.7 sends `plugins.item` props, which carry the render subject. The
+ * host renders that slot three times: `{ view: 'summary' }` for the list row's
+ * description and for the detail header, and `{ view: 'page', form }` for the
+ * detail body. `form` is the host's own `{ state, mutate }` projection of the
+ * config controller — not the live controller — so the card keeps binding the
+ * `configForms` document itself (reactive subscribe + set/unset/recover), which
+ * that projection cannot offer.
+ */
 export type ProxyModelCardProps =
   PropsRuntime<'settings.plugin.item'>
   & InjectFace<ProxyModelCardInjected>
+  & {
+    /** Which rendering of the root list slot this is (dsh ≥ 0.1.7). */
+    view?: 'summary' | 'page'
+    /** Host-supplied `{ state, mutate }` projection for the page view. */
+    form?: unknown
+  }
 
 /** The resolved llm-proxy config shape (mirrors lib/index.js Config). */
 interface ProxyConfig {
@@ -591,6 +609,30 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
 }
 
 /**
+ * The inline description dsh ≥ 0.1.7 renders for this slot
+ * (`{ view: 'summary' }`): the Plugins list row's description and the detail
+ * page header. It must stay inline content — the host wraps it in its own row
+ * and card, and the host's own open action lives there, so the interactive
+ * `<li>` above would both nest a list item inside the host's and swallow that
+ * action. Falls back to the static one-liner while the document is loading.
+ */
+function ProxyModelSummary({ useSnapshot, t }: {
+  useSnapshot: () => ProxyModelSnapshot
+  t: (key: keyof typeof en) => string
+}): ReactNode {
+  const snapshot = useSnapshot()
+  const config = snapshot.status === 'ready' ? (snapshot.value as ProxyConfig | undefined) : undefined
+  const models = config?.proxiedModels ?? []
+  return (
+    <span className={styles.description} data-testid="proxy-model-summary">
+      {config === undefined
+        ? t('description')
+        : `${config.proxyHost}:${config.proxyPort} · ${models.length} ${t('summaryModels')}`}
+    </span>
+  )
+}
+
+/**
  * The 模型代理 plugin card: a header naming the plugin over a line describing
  * what its settings govern, disclosing the configurable items in place.
  * Renders nothing (returns null) until the slot outlet supplies the inject
@@ -600,6 +642,9 @@ export function ProxyModelCard(props: ProxyModelCardProps): ReactNode {
   const { scope, useSnapshot, t } = props
   const [open, setOpen] = useState(false)
   if (scope === undefined || useSnapshot === undefined || t === undefined) return null
+  // The summary renderings are not the card (see ProxyModelSummary); only the
+  // page view and the ≤ 0.1.6 keyed slot (no `view` at all) get the <li>.
+  if (props.view === 'summary') return <ProxyModelSummary useSnapshot={useSnapshot} t={t} />
   return (
     <li className={styles.card}>
       <button

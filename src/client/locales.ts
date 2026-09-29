@@ -12,7 +12,7 @@ export const zh = {
   statusLoading: '加载中…',
   statusUnavailable: '设置服务不可用，无法读取或写入代理配置。',
   fieldProxyHost: '代理地址（proxyHost）',
-  fieldProxyHostHint: '代理服务器主机或 IP，不必是本机。',
+  fieldProxyHostHint: '代理服务器主机或 IP，不必是本机；也可直接粘贴 http://、https:// 或 socks5:// 开头的完整地址（含端口的 host:port 同样识别）。',
   fieldProxyPort: '代理端口（proxyPort）',
   fieldProxyPortHint: '代理服务端口（1–65535）。',
   fieldProxiedModels: '走代理的模型（proxiedModels）',
@@ -52,6 +52,7 @@ export const zh = {
   testDirect: '直连',
   testMultimodalOn: '多模态已开启',
   testBarHint: '「测试连接」走已保存的配置，改代理勾选后请先保存再测试。',
+  summaryModels: '个模型走代理',
 }
 
 /** English dictionary, checked complete against the zh key set. */
@@ -62,7 +63,7 @@ export const en: Record<keyof typeof zh, string> = {
   statusLoading: 'Loading…',
   statusUnavailable: 'Settings service unavailable; the proxy configuration cannot be read or written.',
   fieldProxyHost: 'Proxy host (proxyHost)',
-  fieldProxyHostHint: 'Proxy server hostname or IP; does not have to be this machine.',
+  fieldProxyHostHint: 'Proxy server hostname or IP; does not have to be this machine. A full http://, https:// or socks5:// URL — or a bare host:port — is split automatically.',
   fieldProxyPort: 'Proxy port (proxyPort)',
   fieldProxyPortHint: 'Proxy service port (1–65535).',
   fieldProxiedModels: 'Proxied models (proxiedModels)',
@@ -102,6 +103,7 @@ export const en: Record<keyof typeof zh, string> = {
   testDirect: 'direct',
   testMultimodalOn: 'multimodal on',
   testBarHint: 'Test uses the saved routing; save before testing a newly proxied model.',
+  summaryModels: 'models proxied',
 }
 
 export type ProxyKey = keyof typeof zh

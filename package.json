@@ -1,6 +1,6 @@
 {
   "name": "@anpiluo/dsh-proxy",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "description": "DSH 模型代理插件：按模型走代理（Clash 等）+ 失败自动重试 + 直连失败自动回退代理，设置页实时生效。",
   "author": "anpiluo",
   "repository": {
@@ -31,8 +31,8 @@
     "prepare": "tsdown",
     "build:watch": "tsdown --watch",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/routing-dispatcher.test.js test/failover-dispatcher.test.js test/installer.test.js test/settings.test.js test/retry-mirror.test.js test/multimodal-mirror.test.js test/connection-test.test.js",
-    "test:client": "node test/client-build.test.js",
+    "test": "node --test test/routing-dispatcher.test.js test/failover-dispatcher.test.js test/installer.test.js test/settings.test.js test/retry-mirror.test.js test/multimodal-mirror.test.js test/connection-test.test.js test/volatile-settings.test.js",
+    "test:client": "node test/client-build.test.js && node test/client-shape-check.mjs",
     "test:smoke": "node test/smoke-test.mjs",
     "test:load": "node test/load-test.mjs",
     "test:global": "node test/global-fetch-probe.mjs",
@@ -67,15 +67,13 @@
     "client": {
       "inject": [
         "slots",
-        "locale",
-        "settingsScope",
-        "remote"
+        "locale"
       ],
       "platform": "web"
     }
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.1",
+    "@deepseek-ai/schemastery": "^3.18.4",
     "undici": "^8.10.0"
   },
   "peerDependencies": {

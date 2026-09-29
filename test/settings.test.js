@@ -10,7 +10,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { SettingsConflictError } from '@deepseek-ai/dsh-settings'
-import { apply, Config, name, resolveProxyHosts } from '../lib/index.js'
+import { apply, Config, name, plainProxyConfig, resolveProxyHosts } from '../lib/index.js'
+/**
+ * Resolved plain configuration — the shape a pre-0.1.7 host hands over.
+ * The schema itself now parses volatile fields into live references
+ * (dsh >= 0.1.7 semantics), so anything asserting on plain values goes
+ * through the plugin's own reader.
+ */
+const resolveConfig = (patch) => plainProxyConfig(Config(patch))
+
 import {
   LLM_PROXY_NAMESPACE,
   SETTINGS_BRIDGE_PREFIX,
@@ -147,7 +155,7 @@ test('plugin exports name and Config schema', () => {
 })
 
 test('Config defaults match the documented v4 shape', () => {
-  const cfg = Config({})
+  const cfg = resolveConfig({})
   assert.equal(cfg.proxyHost, '127.0.0.1')
   assert.equal(cfg.proxyPort, 7897)
   assert.deepEqual(cfg.proxiedModels, [])
@@ -156,7 +164,7 @@ test('Config defaults match the documented v4 shape', () => {
 })
 
 test('apply registers the settings namespace and installs the dispatcher (live)', async () => {
-  const base = Config({ proxiedModels: ['deepseek-v4-flash/deepseek-v4-flash'] })
+  const base = resolveConfig({ proxiedModels: ['deepseek-v4-flash/deepseek-v4-flash'] })
   const { seam, state } = makeFakeSeam({ base, extraNamespaces: [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] })
   const { ctx, calls } = makeCtx({ seam: () => seam })
   await apply(ctx, base)
@@ -172,7 +180,7 @@ test('apply registers the settings namespace and installs the dispatcher (live)'
 })
 
 test('watch re-applies the dispatcher on committed changes', async () => {
-  const base = Config({})
+  const base = resolveConfig({})
   const { seam, state } = makeFakeSeam({ base, extraNamespaces: [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] })
   const { ctx, calls } = makeCtx({ seam: () => seam })
   await apply(ctx, base)
@@ -185,7 +193,7 @@ test('watch re-applies the dispatcher on committed changes', async () => {
 
 test('apply falls back to patch config without a settings seam', async () => {
   const { ctx, calls } = makeCtx({ seam: undefined })
-  const config = Config({ proxiedModels: [] })
+  const config = resolveConfig({ proxiedModels: [] })
   await apply(ctx, config)
   const installLogs = calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher'))
   assert.equal(installLogs.length, 1, 'install happens')
@@ -228,7 +236,7 @@ test('listModels aggregates llm-pi-ai and llm-deepseek models', () => {
 })
 
 test('bridge describe serves the llm-proxy namespace view', async () => {
-  const base = Config({})
+  const base = resolveConfig({})
   const { seam } = makeFakeSeam({ base })
   const handlers = makeBridgeHandlers(seam)
   const result = await handlers.describe()
@@ -240,7 +248,7 @@ test('bridge describe serves the llm-proxy namespace view', async () => {
 })
 
 test('bridge mutate persists ops and returns the updated view', async () => {
-  const base = Config({})
+  const base = resolveConfig({})
   const { seam, state } = makeFakeSeam({ base })
   const handlers = makeBridgeHandlers(seam)
   const result = await handlers.mutate({
@@ -254,7 +262,7 @@ test('bridge mutate persists ops and returns the updated view', async () => {
 })
 
 test('bridge mutate refuses unknown namespaces', async () => {
-  const base = Config({})
+  const base = resolveConfig({})
   const { seam } = makeFakeSeam({ base })
   const handlers = makeBridgeHandlers(seam)
   const result = await handlers.mutate({ ns: 'other-plugin', ops: [] })
@@ -263,7 +271,7 @@ test('bridge mutate refuses unknown namespaces', async () => {
 })
 
 test('bridge mutate rejects malformed bodies', async () => {
-  const base = Config({})
+  const base = resolveConfig({})
   const { seam } = makeFakeSeam({ base })
   const handlers = makeBridgeHandlers(seam)
   for (const body of [null, {}, { ns: 'llm-proxy' }, { ns: 'llm-proxy', ops: 'nope' }, { ns: 42, ops: [] }]) {
@@ -274,7 +282,7 @@ test('bridge mutate rejects malformed bodies', async () => {
 })
 
 test('bridge maps seam conflicts to settings-conflict', async () => {
-  const base = Config({})
+  const base = resolveConfig({})
   const { seam } = makeFakeSeam({ base, conflict: true })
   const handlers = makeBridgeHandlers(seam)
   const result = await handlers.mutate({ ns: 'llm-proxy', ops: [{ op: 'set', path: ['proxyHost'], value: '10.0.0.1' }], expectedRevision: 1 })
@@ -287,7 +295,7 @@ test('bridge maps HOST-copy SettingsConflictError to settings-conflict (structur
   // identity never matches across copies. Regression for the duck-typed
   // failureOf(): any error carrying the official name must map to
   // settings-conflict regardless of which copy constructed it.
-  const base = Config({})
+  const base = resolveConfig({})
   const { seam } = makeFakeSeam({ base })
   seam.mutate = async () => {
     const hostCopyError = new Error('stale revision (host copy)')
@@ -306,7 +314,7 @@ test('bridge maps code-only conflict markers to settings-conflict (belt-and-susp
   // class field `code = "SETTINGS_CONFLICT"`. If a future dsh-settings ever
   // renames the Error class but keeps the wire code (or vice versa), the
   // mapping must still hold.
-  const base = Config({})
+  const base = resolveConfig({})
   const { seam } = makeFakeSeam({ base })
   seam.mutate = async () => {
     const codeOnly = new Error('stale revision (code marker only)')
@@ -326,7 +334,7 @@ test('bridge maps code-only conflict markers to settings-conflict (belt-and-susp
 })
 
 test('bridge routes enforce loopback + POST', async () => {
-  const base = Config({})
+  const base = resolveConfig({})
   const { seam } = makeFakeSeam({ base })
   const routes = makeBridgeRoutes(seam)
   assert.equal(routes.length, 4)
@@ -497,4 +505,46 @@ test('resolveProxyHosts matches catalog-backed models without explicit models', 
   } finally {
     __resetCatalogForTest()
   }
+})
+
+test('bridge trust: trustedOrigins admits a reverse-proxy origin, origin check still guards', async () => {
+  const { seam } = makeFakeSeam({ base: resolveConfig({}) })
+  const makeRes = () => ({
+    writeHead(status, headers) { this.status = status; this.headers = headers },
+    end(payload) { this.body = payload },
+  })
+  const post = (host, origin) => ({
+    method: 'POST',
+    headers: { host, ...(origin === undefined ? {} : { origin }) },
+    socket: { remoteAddress: '127.0.0.1' },
+  })
+
+  // Public Host on a loopback socket is refused by default …
+  const strict = makeBridgeRoutes(seam)
+  const res1 = makeRes()
+  await strict[0].handler(post('dsh.example.com', 'https://dsh.example.com'), res1)
+  assert.equal(res1.status, 403, 'public host refused without trustedOrigins')
+
+  // … and admitted once the origin is trusted.
+  const relaxed = makeBridgeRoutes(seam, { trustedOrigins: ['https://dsh.example.com'] })
+  const res2 = makeRes()
+  await relaxed[0].handler(post('dsh.example.com', 'https://dsh.example.com'), res2)
+  assert.equal(res2.status, 200, 'trusted public host allowed')
+  assert.ok(String(res2.body).includes('namespaces'), 'describe answered')
+
+  // Same-origin still applies: a page on another origin cannot pass.
+  const res3 = makeRes()
+  await relaxed[0].handler(post('dsh.example.com', 'https://evil.example.com'), res3)
+  assert.equal(res3.status, 403, 'cross-site origin refused')
+
+  // A getter keeps a live settings edit effective without a remount.
+  let origins = []
+  const dynamic = makeBridgeRoutes(seam, { trustedOrigins: () => origins })
+  const res4 = makeRes()
+  await dynamic[0].handler(post('dsh.example.com', 'https://dsh.example.com'), res4)
+  assert.equal(res4.status, 403, 'getter read at request time (empty)')
+  origins = ['https://dsh.example.com']
+  const res5 = makeRes()
+  await dynamic[0].handler(post('dsh.example.com', 'https://dsh.example.com'), res5)
+  assert.equal(res5.status, 200, 'live edit admitted')
 })

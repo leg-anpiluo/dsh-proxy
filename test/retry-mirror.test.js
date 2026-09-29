@@ -9,7 +9,15 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { apply, Config } from '../lib/index.js'
+import { apply, Config, plainProxyConfig } from '../lib/index.js'
+/**
+ * Resolved plain configuration — the shape a pre-0.1.7 host hands over.
+ * The schema itself now parses volatile fields into live references
+ * (dsh >= 0.1.7 semantics), so anything asserting on plain values goes
+ * through the plugin's own reader.
+ */
+const resolveConfig = (patch) => plainProxyConfig(Config(patch))
+
 import { __resetCatalogForTest, __setCatalogForTest } from '../lib/catalog.js'
 
 /** Flush pending microtasks/macrotasks so fire-and-forget async settles. */
@@ -117,7 +125,7 @@ function makeCtx({ seam }) {
 }
 
 test('mirror writes retryPolicy for selected models only', async () => {
-  const base = Config({
+  const base = resolveConfig({
     proxiedModels: ['deepseek-v4-flash/deepseek-v4-flash'],
     retries: 5,
     retryIntervalMs: 1000,
@@ -137,7 +145,7 @@ test('mirror writes retryPolicy for selected models only', async () => {
 })
 
 test('mirror follows card edits (watch path)', async () => {
-  const base = Config({
+  const base = resolveConfig({
     proxiedModels: ['deepseek-v4-flash/deepseek-v4-flash'],
     retries: 3,
     retryIntervalMs: 1000,
@@ -159,7 +167,7 @@ test('mirror follows card edits (watch path)', async () => {
 })
 
 test('deselecting a model restores official defaults', async () => {
-  const base = Config({
+  const base = resolveConfig({
     proxiedModels: ['deepseek-v4-flash/deepseek-v4-flash'],
     retries: 5,
     retryIntervalMs: 1000,
@@ -257,7 +265,7 @@ test('mirror matches catalog-backed providers (no explicit models)', async () =>
     { id: 'mimo-v2.5', name: 'MiMo-V2.5', baseUrl: 'https://api.xiaomimimo.com/v1' },
   ] : []))
   try {
-    const base = Config({
+    const base = resolveConfig({
       proxiedModels: ['xiaomi/mimo-v2.5'],
       retries: 7,
       retryIntervalMs: 2000,

@@ -1,4 +1,12 @@
-# @anpiluo/dsh-proxy v2.0.3 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
+# @anpiluo/dsh-proxy v2.1.0 — bundle patch: inserts the LLM proxy-routing plugin row (deployment-global).
+#
+# v2.1.0: supported on dsh 0.1.2–0.1.6 AND 0.1.7+ / 0.2.0.
+#   - dsh ≥ 0.1.7 derives this entry's settings DOCUMENT from the plugin's
+#     volatile Config, addressed by the loader entry id below ('dsh-proxy'),
+#     and shows it as 设置 → 插件 → 模型代理. Values set here are the base
+#     layer; edits made in the page persist to your settings file.
+#   - dsh ≤ 0.1.6 registers the same document as the 'llm-proxy' namespace and
+#     shows the card under 插件 → 可配置插件. Nothing to change for users.
 #
 # v2.0.3: loader entry id renamed 'llm-proxy' → 'dsh-proxy'. The old id
 # collided with the upstream @superfish058/dsh-llm-proxy (same explicit id)
@@ -16,13 +24,18 @@
 #                      doomed direct attempt (ms; 0 retries direct every time).
 #
 # v1.0.0 (model-level intent):
-#   proxyHost      proxy hostname/IP (does not have to be this machine; default 127.0.0.1)
+#   proxyHost      proxy hostname/IP (does not have to be this machine; default 127.0.0.1);
+#                  a full URL is accepted too (http://10.0.0.9:1080, socks5://host)
 #   proxyPort      proxy port (default 7897)
 #   proxiedModels  model keys that route through the proxy, `<providerId>/<modelId>`
 #                  (resolved against llm-pi-ai + llm-deepseek settings); everything
 #                  else stays DIRECT. Loopback hosts are always direct.
 #   retries        max retry attempts for failed requests (transport error / 429 / 5xx)
 #   retryIntervalMs delay between retries (ms)
+#   multimodalModels model keys to advertise as image-capable — dsh ≤ 0.1.6 only;
+#                  on ≥ 0.1.7 the official model settings page owns input modalities
+#   trustedOrigins public origins allowed to reach the settings bridge when this
+#                  deployment sits behind a reverse proxy (same-origin still enforced)
 #
 # Edit values below, or use the 设置 → 模型代理 page (which also lists the selectable models).
 - insert:
@@ -38,3 +51,5 @@
         failoverEnabled: true
         # failoverProxy: ''            # '' = reuse proxyHost:proxyPort
         negativeCacheTtlMs: 60000
+        # trustedOrigins:
+        #   - 'https://dsh.example.com'  # only when serving dsh behind a reverse proxy

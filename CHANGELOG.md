@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.1.0 (2026-09-29)
+
+**适配 DSH 0.1.7 / 0.2.0 的设置机制重构，并修复本插件在新宿主上必然启动失败的问题。** 用户现有配置（`llm-proxy` 命名空间文档、已保存的代理选择）无需迁移。
+
+- **修复（严重）：客户端在 DSH ≥ 0.1.7 上启动失败**。0.1.7 删除了 `settingsScope` 服务，而客户端把它放进了**硬 `inject`**——cordis 对已消失服务的硬注入会让该 fiber 永远 pending，宿主启动审计只报「某插件无错误文本」，表现即 renderer boot failed / 插件静默不生效。现改为**动态解析**设置服务，`inject` 只保留 `slots`/`locale`：
+  - DSH ≥ 0.1.7：官方 `configForms` 服务，按 **loader entry id `dsh-proxy`** 取设置文档；
+  - DSH 0.1.2–0.1.6：`settingsScope.bind({ namespace: 'llm-proxy' })`（原路径不变）；
+  - 两者都不可用：回落到本包回环桥（不再 throw，`bind()` 不再会连带整插件挂掉）。
+  页面同时注册到两代槽位：旧 keyed `settings.plugin.item`（key 保持命名空间 `llm-proxy`）+ 新根列表 `plugins.item`（id 为 entry id `dsh-proxy`、`order: 50`），一条 bundle 两代通用。
+- **宿主半边适配新的设置文档模型**。0.1.7 起 `settings.register()`/`watch()` 不存在，设置文档由插件 `volatile()` 后的 Config 派生、按 loader entry id 寻址，写入由 loader **就地提交**到 live accessor 并触发 `loader/volatile-update`。新增 `volatileDocumentSeam` 把新服务投影成旧的「读 + 监听」面（`describe`/`mutate` 原样透传），使 install/热更新/桥接逻辑两代共用一套；Config 全字段 `live()` 包裹（`Schema#volatile` 缺失时自动降级并 warn 一次），新增 `fieldValue()`/`plainProxyConfig()` 统一读取 live accessor 与普通值。
+- **与官方 `@deepseek-ai/dsh-http-proxy` 协作（不再旁路宿主出站策略）**。宿主自 0.1.3 起在插件加载前就装好官方全局 dispatcher（读 `HTTP_PROXY`/`HTTPS_PROXY`）。插件此前用私有 `Agent` 承接**直连**路径，等于静默丢弃部署自身的出站策略。现直连路径**链接**到被自己替换掉的宿主 dispatcher（借用语义：绝不被 close/destroy），插件只接管「走代理的模型」的 host。fork 特有的**直连失败回退 + 负缓存**保持不变（未采用上游 v1.4.0「把策略交给官方层、去掉自身引擎」的做法，那会丢失回退能力）。
+- 合并上游 v1.3.0 两项：`trustedOrigins` 反向代理白名单（新增同名 Config 字段，桥接仍强制同源校验，支持 getter 以便热更新生效）；`normalizeProxyEndpoint`（`proxyHost` 接受整条 URL，不再拼出 `http://http://host:7897`）。
+- **多模态镜像在 DSH ≥ 0.1.7 主动让位**：官方模型设置页自己拥有 `inputModalities`，两个写者会互相覆盖；新宿主上镜像停用并打一行日志（`owns model input modalities`），≤ 0.1.6 行为完全不变。
+- 测试：新增 `test/volatile-settings.test.js`（新宿主路径 4 例：live accessor 解包、seam 适配、apply 装/热更新/镜像让位、describe 抛错回落）；`test/routing-dispatcher.test.js` 补端点归一化与「借用 dispatcher 不被关闭」3+3 例；`test/settings.test.js` 补 `trustedOrigins` 信任与同源护栏用例。`test/client-shape-check.mjs` 修正早已过时的 bundle id 断言并补新版槽位/服务断言，且接入 `npm run test:client`（CI 现在会跑）。
+- 依赖：`@deepseek-ai/schemastery` `^3.18.1` → `^3.18.4`（`Schema#volatile` 的起始版本）。
+- 版本 2.1.0（minor：新增配置项 + 宿主适配；无破坏性 API 变更——两代宿主同一份产物）。lock 同步。
+
 ## v2.0.3 (2026-09-07)
 
 - **修复：与上游包并存时启动崩溃**（`duplicate loader entry id: llm-proxy`）。根因：`cordis.patch.yml` 显式声明 loader entry `id: llm-proxy`，而同源的上游 `@superfish058/dsh-llm-proxy` 用同一 id——两个包同时装在 profile 时 insert 条目撞车，`dsh web` 无法启动。**loader entry id 改为 `dsh-proxy`**（与 npm 包名对齐）。

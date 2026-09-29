@@ -21,6 +21,16 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 /** Settings namespace owned by the plugin (mirrors lib/settings.js). */
 export const LLM_PROXY_NAMESPACE = 'llm-proxy'
 
+/**
+ * Cordis Loader entry id the plugin is composed under (mirrors
+ * `LLM_PROXY_ENTRY_ID` in lib/index.js).
+ *
+ * dsh ≥ 0.1.7 addresses a plugin's settings document by this id instead of by
+ * a registered namespace, so the `configForms` path asks for it while the
+ * bridge and the pre-0.1.7 binder keep using `LLM_PROXY_NAMESPACE`.
+ */
+export const LLM_PROXY_ENTRY_ID = 'dsh-proxy'
+
 /** Bridge route prefix (same-origin, loopback-only). */
 const SETTINGS_BRIDGE_PREFIX = '/api/dsh-proxy/settings'
 
@@ -427,10 +437,77 @@ function isBinderFace(value: unknown): value is { bind(spec: { namespace: string
 }
 
 /**
- * The rc.6 compatibility binder, provided as the `llmProxySettings` service.
- * Rides the official binder first and hands the bridge controller in only
- * when the official scope settles as unavailable, so official behaviour stays
- * untouched wherever it works and the Host remains the authority.
+ * The per-entry form dsh ≥ 0.1.7's `configForms` service returns.
+ *
+ * Its snapshot is the same shape this card already consumes
+ * (`status`/`value`/`base`/`user`/`revision`/`writable`), and its `set`/`unset`
+ * resolve `false` on a Host refusal (revision conflict, unwritable document)
+ * instead of rejecting.
+ */
+export interface ConfigFormFace {
+  getSnapshot(): unknown
+  subscribe(listener: () => void): () => void
+  set(field: string, value: unknown): Promise<boolean>
+  unset(field: string): Promise<boolean>
+  dispose(): Promise<void> | void
+}
+
+/** The `configForms` service surface this plugin consumes. */
+export interface ConfigFormsSurface {
+  /** The form of one Host plugin entry id. */
+  get(entryId: string): ConfigFormFace
+}
+
+/**
+ * Reach the `configForms` service on a context, or undefined when this host
+ * does not provide it (dsh ≤ 0.1.6 — the caller stays inert instead of failing
+ * its own fiber).
+ * @param ctx - any context carrying the service.
+ */
+export function configFormsOf(ctx: Context): ConfigFormsSurface | undefined {
+  const service = ctx.get('configForms') as unknown
+  if (typeof service !== 'object' || service === null) return undefined
+  const get = (service as { get?: unknown }).get
+  if (typeof get !== 'function') return undefined
+  return service as ConfigFormsSurface
+}
+
+/**
+ * Project the 0.1.7+ form onto the official scope face the compat scope
+ * already understands, so one composite (official primary + bridge fallback)
+ * serves both host generations.
+ *
+ * The controller keeps itself fresh by subscribing to the Host mirror, so
+ * `load()` is a no-op; a refusal (`false`) is raised as an error so the
+ * caller's batch write reports it instead of a false success.
+ * @param form - the entry form from `configForms.get()`.
+ */
+function officialFaceOf(form: ConfigFormFace): OfficialScopeFace {
+  return {
+    getSnapshot: () => form.getSnapshot(),
+    subscribe: (listener) => form.subscribe(listener),
+    set: async (field, value) => {
+      if (await form.set(field, value) === false) throw new Error('dsh-proxy: settings write refused')
+    },
+    unset: async (field) => {
+      if (await form.unset(field) === false) throw new Error('dsh-proxy: settings write refused')
+    },
+    load: async () => { /* the Host mirror pushes updates into the form */ },
+    dispose: async () => { await form.dispose() },
+  }
+}
+
+/**
+ * The settings binder, provided as the `llmProxySettings` service.
+ *
+ * Three host generations are covered by one scope face:
+ *   - dsh ≥ 0.1.7: `configForms.get(entryId)` — the document derived from the
+ *     plugin's volatile Config, addressed by the Loader entry id.
+ *   - dsh 0.1.2–0.1.6: `settingsScope.bind({ namespace })`.
+ *   - any host whose official document never settles (rc.6 namespace
+ *     allowlist, unreachable document): the loopback bridge.
+ * The official document always wins while it reports ready, so the Host stays
+ * the authority and the bridge is only ever a stand-in.
  */
 export class LlmProxySettingsBinder extends Service {
   constructor(ctx: Context) {
@@ -439,16 +516,31 @@ export class LlmProxySettingsBinder extends Service {
 
   bind(): ProxyModelScope {
     const ctx = this.ctx
-    const official = ctx.get('settingsScope') as unknown
-    if (!isBinderFace(official)) throw new Error('llmProxySettings: the official settingsScope binder is unavailable')
-    const primary = official.bind({ namespace: LLM_PROXY_NAMESPACE })
-    const scope = createCompatScope(primary, (input, init) => fetch(input, init))
+    const bridge = (): ProxyModelScope => new BridgeScopeController((input, init) => fetch(input, init))
+
+    const forms = configFormsOf(ctx)
+    let primary: OfficialScopeFace | undefined
+    let documentKey = LLM_PROXY_NAMESPACE
+    if (forms !== undefined) {
+      primary = officialFaceOf(forms.get(LLM_PROXY_ENTRY_ID))
+      documentKey = LLM_PROXY_ENTRY_ID
+    } else {
+      const official = ctx.get('settingsScope') as unknown
+      if (isBinderFace(official)) primary = official.bind({ namespace: LLM_PROXY_NAMESPACE })
+    }
+
+    // No official document at all: stay on the bridge instead of throwing.
+    // Throwing here would abort this plugin's apply() and take the whole
+    // client plugin down (dsh ≥ 0.1.7 no longer provides `settingsScope`).
+    const scope = primary === undefined
+      ? bridge()
+      : createCompatScope(primary, (input, init) => fetch(input, init))
     ctx.effect(() => {
       const remote = ctx.get('remote') as { $on?: (event: string, listener: (ns?: string) => void) => () => void } | undefined
       const disposers: Array<() => void> = []
       if (remote !== undefined && typeof remote.$on === 'function') {
         disposers.push(remote.$on('settings/document-updated', (namespace) => {
-          if (namespace !== undefined && namespace !== LLM_PROXY_NAMESPACE) return
+          if (namespace !== undefined && namespace !== documentKey) return
           void scope.load()
         }))
       }

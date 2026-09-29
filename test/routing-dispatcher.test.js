@@ -313,3 +313,72 @@ test('RetryAgent: retries disabled (0) forwards the failure immediately', async 
   assert.ok(out.error instanceof Error)
   assert.equal(record.length, 1)
 })
+
+// --- Proxy endpoint normalization (upstream v1.3.0 port) ----------------------
+test('a bare host builds an http endpoint with the configured port', () => {
+  const d = makeDispatcher([], { proxyHost: '127.0.0.1', proxyPort: 7897, proxyHosts: ['api.b.ai'] })
+  assert.equal(d.proxyEndpoint, 'http://127.0.0.1:7897')
+  assert.equal(d.proxy.uri, 'http://127.0.0.1:7897')
+})
+
+test('a pasted proxy URL is not double-schemed', () => {
+  // `http://http://host:7897` would break every proxied request; the scheme
+  // and embedded port of a full URL must be adopted instead.
+  const d = makeDispatcher([], { proxyHost: 'http://10.0.0.9:1080', proxyPort: 7897, proxyHosts: ['api.b.ai'] })
+  assert.equal(d.proxyEndpoint, 'http://10.0.0.9:1080')
+  assert.equal(d.proxy.uri, 'http://10.0.0.9:1080')
+  assert.equal(d.proxyHost, '10.0.0.9')
+  assert.equal(d.proxyPort, 1080)
+})
+
+test('a socks5 endpoint keeps its scheme and the configured port', () => {
+  const d = makeDispatcher([], { proxyHost: 'socks5://10.0.0.9', proxyPort: 1080, proxyHosts: ['api.b.ai'] })
+  assert.equal(d.proxyEndpoint, 'socks5://10.0.0.9:1080')
+})
+
+// --- Borrowed direct dispatcher (official dsh-http-proxy cooperation) ---------
+test('a chained direct dispatcher carries the direct path', () => {
+  const record = []
+  const borrowed = []
+  const upstream = {
+    dispatch(opts, handler) {
+      borrowed.push(opts.origin)
+      handler?.onResponseStart?.(200, {}, 'OK', opts.origin)
+      handler?.onResponseEnd?.(null, {})
+      return true
+    },
+    close() { borrowed.push('close') },
+    destroy() { borrowed.push('destroy') },
+  }
+  const d = makeDispatcher(record, { proxyHosts: ['api.b.ai'], directDispatcher: upstream })
+  // Unselected host → the deployment's own dispatcher, not a private Agent.
+  d.dispatch(req('https://api.deepseek.com/v1'), {})
+  assert.deepEqual(borrowed, ['https://api.deepseek.com/v1'])
+  assert.equal(record.length, 0, 'private Agent not used for the direct path')
+  // Pinned host still rides this plugin's ProxyAgent.
+  d.dispatch(req('https://api.b.ai/v1'), {})
+  assert.equal(record.length, 1)
+})
+
+test('a borrowed direct dispatcher is never closed or destroyed', () => {
+  // Retiring our stack must not tear down the host's own transport.
+  const borrowed = []
+  const upstream = {
+    dispatch: () => true,
+    close() { borrowed.push('close') },
+    destroy() { borrowed.push('destroy') },
+  }
+  const d = makeDispatcher([], { directDispatcher: upstream })
+  assert.equal(d.directOwned, false)
+  d.close()
+  d.destroy()
+  assert.deepEqual(borrowed, [], 'borrowed dispatcher left alone')
+})
+
+test('a private direct dispatcher is still closed and destroyed', () => {
+  const d = makeDispatcher([])
+  assert.equal(d.directOwned, true)
+  assert.ok(d.direct instanceof Object, 'private Agent created')
+  d.close()
+  d.destroy()
+})

@@ -11,7 +11,15 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { apply, Config } from '../lib/index.js'
+import { apply, Config, plainProxyConfig } from '../lib/index.js'
+/**
+ * Resolved plain configuration — the shape a pre-0.1.7 host hands over.
+ * The schema itself now parses volatile fields into live references
+ * (dsh >= 0.1.7 semantics), so anything asserting on plain values goes
+ * through the plugin's own reader.
+ */
+const resolveConfig = (patch) => plainProxyConfig(Config(patch))
+
 import { __resetCatalogForTest, __setCatalogForTest } from '../lib/catalog.js'
 
 /** Flush pending microtasks/macrotasks so fire-and-forget async settles. */
@@ -193,7 +201,7 @@ function makeCtx({ seam }) {
 }
 
 test('mirror writes [text, image] input for selected models only (pi-ai explicit)', async () => {
-  const base = Config({
+  const base = resolveConfig({
     multimodalModels: ['deepseek-v4-flash/deepseek-v4-flash'],
   })
   const { seam, getPi } = makeMirrorSeam({ base })
@@ -214,7 +222,7 @@ test('mirror writes modelOverrides for catalog-backed providers', async () => {
     { id: 'mimo-v2.5', name: 'MiMo-V2.5', baseUrl: 'https://api.xiaomimimo.com/v1' },
   ] : []))
   try {
-    const base = Config({
+    const base = resolveConfig({
       multimodalModels: ['xiaomi/mimo-v2.5'],
     })
     const seam = {
@@ -264,7 +272,7 @@ test('mirror writes modelOverrides for catalog-backed providers', async () => {
 })
 
 test('mirror writes inputModalities for llm-deepseek route', async () => {
-  const base = Config({
+  const base = resolveConfig({
     multimodalModels: ['deepseek-official/deepseek-chat'],
   })
   const { seam, getDeepseek } = makeMirrorSeam({ base, withDeepseek: true })
@@ -278,7 +286,7 @@ test('mirror writes inputModalities for llm-deepseek route', async () => {
 })
 
 test('deselecting a multimodal model restores the official defaults', async () => {
-  const base = Config({
+  const base = resolveConfig({
     multimodalModels: ['deepseek-v4-flash/deepseek-v4-flash'],
   })
   const { seam, getPi } = makeMirrorSeam({ base })
@@ -299,7 +307,7 @@ test('deselecting a multimodal model restores the official defaults', async () =
 })
 
 test('already-multimodal models keep their declared input untouched', async () => {
-  const base = Config({
+  const base = resolveConfig({
     multimodalModels: ['deepseek-v4-flash/deepseek-v4-flash-vision-exp'],
   })
   // User already declared image support in settings.yaml  (`input: [text, image]`).

@@ -1,15 +1,26 @@
 /**
- * dsh-proxy — browser half. Registers the 模型代理 plugin card inside
- * 设置 → 插件 → 可配置插件 via the `settings.plugin.item` slot (declared at
- * runtime by @deepseek-ai/dsh-client-ui-settings-plugins), whose card shows
- * the configurable proxy-model form. Data rides the llm-proxy settings scope,
- * which prefers the official settings transport and falls back to this
- * package's loopback bridge on hosts whose apiproxy does not expose the
- * namespace (rc.6 hard-coded allowlist; see README).
+ * dsh-proxy — browser half.
+ *
+ * The 模型代理 page is registered into whichever settings surface the host
+ * provides, so one bundle serves every supported dsh generation:
+ *   - dsh ≥ 0.1.7: the Plugins page's root list slot `plugins.item` (declared
+ *     at runtime by @deepseek-ai/dsh-client-ui-plugin-manager), bound to the
+ *     settings document derived from the plugin's volatile Config and
+ *     addressed by its Loader entry id (`dsh-proxy`) through the official
+ *     `configForms` service.
+ *   - dsh 0.1.2–0.1.6: the 可配置插件 tab's keyed `settings.plugin.item` slot
+ *     (declared by @deepseek-ai/dsh-client-ui-settings-plugins), bound to the
+ *     registered `llm-proxy` namespace.
+ * Both slots are declared at runtime, so injecting the one this host does not
+ * have simply waits. A *hard* inject of a service the host dropped
+ * (`settingsScope` on ≥ 0.1.7) is the trap: it leaves this fiber pending
+ * forever and surfaces as a nameless boot failure. The settings service is
+ * therefore resolved dynamically in settings-scope.ts, which falls back to
+ * this package's loopback bridge when no official document is reachable.
  *
  * Export discipline: cross-plugin collaboration goes through cordis services
- * (`slots`, `locale`, `settingsScope`, `remote`, `connection`); the bundle
- * purity gate forbids value imports of other @deepseek-ai packages.
+ * (`slots`, `locale`, `remote`); the bundle purity gate forbids value imports
+ * of other @deepseek-ai packages.
  */
 // ClientContext is the plain cordis Context in 0.1.2 (the pre-0.1.2
 // '@deepseek-ai/dsh-client-runtime/client' type home no longer exists).
@@ -22,7 +33,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import { ProxyModelCard } from './ProxyModelCard.tsx'
 import type { ProxyModelCardInjected } from './ProxyModelCard.tsx'
-import { LlmProxySettingsBinder } from './settings-scope.ts'
+import { LlmProxySettingsBinder, LLM_PROXY_ENTRY_ID, LLM_PROXY_NAMESPACE } from './settings-scope.ts'
 import type { ProxyModelScope } from './settings-scope.ts'
 import { en, zh, type ProxyKey } from './locales.ts'
 
@@ -34,17 +45,31 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** The 模型代理 card copy. */
     'settings.llm-proxy': ProxyKey
   }
+  interface SlotMap {
+    /**
+     * One configurable plugin page on dsh ≥ 0.1.7 (list slot, root scope),
+     * declared at runtime by @deepseek-ai/dsh-client-ui-plugin-manager.
+     * Declared here so this package compiles without that package installed:
+     * the newer settings surface is reached through the `configForms` service,
+     * not through its typings.
+     */
+    'plugins.item': { kind: 'list', scope: 'root' }
+  }
 }
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'settings.llm-proxy'
 
-/** Required services (cordis fiber inject). */
-export const inject = ['slots', 'locale', 'settingsScope', 'remote']
+/**
+ * Required services (cordis fiber inject): core UI services only. The settings
+ * service is resolved dynamically, because its name changed between host
+ * generations (`settingsScope` → `configForms` on dsh 0.1.7).
+ */
+export const inject = ['slots', 'locale']
 
 /**
- * Register the 模型代理 plugin card once the `settings.plugin.item`
- * declaration is on the ledger, and bind the llm-proxy settings scope.
+ * Register the 模型代理 page on every settings slot the host declares and bind
+ * the plugin's settings document.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -59,11 +84,27 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS) as ProxyModelCardInjected['t']
   const injected = (): ProxyModelCardInjected => ({ scope, useSnapshot, t })
 
+  // dsh ≤ 0.1.6: keyed slot. The key is the registered settings NAMESPACE
+  // (`llm-proxy`), which is deliberately not the Loader entry id — rc.7
+  // dispatches this slot by namespace key (no list ordering).
   ctx.slots.inject('settings.plugin.item', function* () {
     yield ctx.slots.register({
       name: 'settings.plugin.item',
-      key: 'llm-proxy',
-      // rc.7: keyed slots dispatch by namespace key (no list ordering).
+      key: LLM_PROXY_NAMESPACE,
+      locale: NS,
+      inject: injected,
+    }, ProxyModelCard)
+  })
+
+  // dsh ≥ 0.1.7: root list slot, keyed by the Loader entry id the Host serves
+  // the settings document under. `order` 50 keeps this third-party page after
+  // the built-in ones (shell 10, agent-loop 20, subagent 30, web-search 40).
+  ctx.slots.inject('plugins.item', function* () {
+    yield ctx.slots.register({
+      name: 'plugins.item',
+      id: LLM_PROXY_ENTRY_ID,
+      order: 50,
+      label: () => t('title'),
       locale: NS,
       inject: injected,
     }, ProxyModelCard)

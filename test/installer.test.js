@@ -21,7 +21,15 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { makeInstaller, Config } from '../lib/index.js'
+import { makeInstaller, Config, plainProxyConfig } from '../lib/index.js'
+/**
+ * Resolved plain configuration — the shape a pre-0.1.7 host hands over.
+ * The schema itself now parses volatile fields into live references
+ * (dsh >= 0.1.7 semantics), so anything asserting on plain values goes
+ * through the plugin's own reader.
+ */
+const resolveConfig = (patch) => plainProxyConfig(Config(patch))
+
 
 const quietLogger = { info() {}, warn() {}, error() {}, debug() {} }
 
@@ -80,7 +88,7 @@ test('teardown restores the pre-plugin dispatcher (2.0.0 regression)', () => {
   undici.state.global = original
   const installer = makeInstaller({ logger: quietLogger }, undici)
 
-  installer.install(undefined, Config({}))
+  installer.install(undefined, resolveConfig({}))
   const installed = undici.state.global
   assert.notEqual(installed, original, 'the plugin stack is installed globally')
   assert.equal(installed.kind, 'RetryAgent', 'the installed root is the RetryAgent wrapper')
@@ -98,9 +106,9 @@ test('re-install retires the replaced stack gracefully (close now, destroy after
   undici.state.global = original
   const installer = makeInstaller({ logger: quietLogger }, undici, { retireGraceMs: 10 })
 
-  installer.install(undefined, Config({}))
+  installer.install(undefined, resolveConfig({}))
   const first = undici.state.global
-  installer.install(undefined, Config({ retries: 1 }))
+  installer.install(undefined, resolveConfig({ retries: 1 }))
   const second = undici.state.global
   assert.notEqual(second, first, 'a settings save swaps in a fresh stack')
   assert.equal(undici.state.global, second)

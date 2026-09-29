@@ -11,7 +11,15 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Config } from '../lib/index.js'
+import { Config, plainProxyConfig } from '../lib/index.js'
+/**
+ * Resolved plain configuration — the shape a pre-0.1.7 host hands over.
+ * The schema itself now parses volatile fields into live references
+ * (dsh >= 0.1.7 semantics), so anything asserting on plain values goes
+ * through the plugin's own reader.
+ */
+const resolveConfig = (patch) => plainProxyConfig(Config(patch))
+
 import { listModels, makeBridgeHandlers, makeBridgeRoutes, SETTINGS_BRIDGE_PREFIX } from '../lib/settings.js'
 import {
   chatCompletionsURL, DEFAULT_TEST_TIMEOUT_MS, findTestTarget, runConnectionTest,
@@ -25,7 +33,7 @@ function makeSeam({ proxiedModels = [], multimodalModels = [], providers, deepse
       schema: {},
       base: {},
       user: {},
-      value: { ...Config({}), proxiedModels, multimodalModels },
+      value: { ...resolveConfig({}), proxiedModels, multimodalModels },
       revision: 0,
     },
   ]

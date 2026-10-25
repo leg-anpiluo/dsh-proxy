@@ -47,15 +47,16 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 
 ## 版本兼容
 
+**DSH 下限：0.1.7**（0.1.0–0.1.6 自 v2.2.0 起不再支持；那些版本请继续用 `@anpiluo/dsh-proxy@2.1.x`）。低于下限时插件会打一条明确日志并保持不介入，不会崩。
+
 | 组件 | 要求 | 说明 |
 |---|---|---|
-| 客户端设置卡（DSH ≥ 0.1.7，含 0.2.0） | 插件页根列表槽位 `plugins.item` | 设置文档不再是「注册的命名空间」，而是由插件 `volatile()` 后的 Config 派生、按 **loader entry id `dsh-proxy`** 寻址；浏览器半边经官方 `configForms` 服务读写它，配置改动由 loader 就地提交并触发 `loader/volatile-update` |
-| 客户端设置卡（DSH 0.1.2–0.1.6） | 可配置插件 tab 的 keyed 槽位 `settings.plugin.item` | 继续走 `settings.register('llm-proxy')`；同一条 bundle 两代宿主都能用 |
-| 宿主半边（dispatcher / 设置桥 / 路由） | DSH ≥ 0.1.0-rc.7 | 纯 Node ESM。≥ 0.1.7 上宿主不再有 `settings.register()`，插件把它适配成同一套读/监听面（`volatileDocumentSeam`），install/热更新逻辑两代共用 |
+| 客户端设置卡 | 插件页根列表槽位 `plugins.item` | 设置文档不再是「注册的命名空间」，而是由插件 `volatile()` 后的 Config 派生、按 **loader entry id `dsh-proxy`** 寻址；浏览器半边经官方 `configForms` 服务读写它，配置改动由 loader 就地提交并触发 `loader/volatile-update` |
+| 宿主半边（dispatcher / 设置桥 / 路由） | DSH ≥ 0.1.7 | 纯 Node ESM。设置文档由插件 `volatile()` 后的 Config 派生，写入由 loader 就地提交并触发 `loader/volatile-update`；install/热更新固定走这一条路径 |
 | 与官方出站代理共存 | DSH ≥ 0.1.3 | 宿主在插件加载前已装好 `@deepseek-ai/dsh-http-proxy` 的全局 dispatcher（读 `HTTP_PROXY`/`HTTPS_PROXY`）。插件不再用私有 Agent 覆盖**直连**路径，而是**链接**到它——本机出站策略继续生效，插件只接管「走代理的模型」那部分 host；卸载时也绝不关闭宿主的 dispatcher |
 | `@earendil-works/pi-ai` | 可选（peer） | 宿主（dsh-llm-pi-ai）提供时模型目录与官方选择器同步；未提供时目录型 provider 显示占位行 |
 
-> **多模态镜像的适用范围**：`multimodalModels` 只在 DSH ≤ 0.1.6 生效。≥ 0.1.7 的官方模型设置页自己拥有 `inputModalities`，插件会主动让位（日志 `owns model input modalities`），避免两个写者互相覆盖；请用官方页配置。该字段在新宿主上保留但不再写入。
+> **多模态（输入类型）**：自 v2.2.0 起由 DSH 自己的「模型」设置页统一管理（模型列表里直接配置输入类型），插件不再提供开关，设置卡里只留一行提示——两边都写会互相覆盖。
 
 ## 配置
 
@@ -63,7 +64,6 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 |---|---|---|
 | `proxyHost` / `proxyPort` | `127.0.0.1:7897` | 代理地址（Clash 等），可不在本机。`proxyHost` 也接受整条 URL（`http://10.0.0.9:1080`、`socks5://host`）或裸 `host:port`，scheme 与内嵌端口会一并采用（socks5 走 SOCKS agent） |
 | `proxiedModels` | `[]` | 走代理的模型，`<providerId>/<modelId>`，其余直连 |
-| `multimodalModels` | `[]` | 多模态镜像（**仅 DSH ≤ 0.1.6**）：勾选**支持图像识别但官方声明/UI 没有图像输入入口**的模型（如 `deepseek-v4-flash-vision-exp`），插件在所属 provider 声明中标记支持图片输入（pi-ai 写 `input`、官方 DeepSeek 写 `inputModalities`），发图不再被 DSH 拒绝；纯文本模型（如 `deepseek-v4-flash`）勾选无意义；取消勾选自动还原。DSH ≥ 0.1.7 上由官方模型设置页接管，此字段失效 |
 | `retries` / `retryIntervalMs` | `3` / `1000` | 失败重试次数与间隔（ms） |
 | `failoverEnabled` | `true` | 直连失败自动回退：非代理目标的直连传输层失败时经代理重发一次 |
 | `failoverProxy` | `''`（复用主代理） | 专用回退端点，`http://` / `https://` / `socks5://` URL |
@@ -73,7 +73,7 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 
 ## 验证
 
-**最快方式**：设置页（DSH ≤ 0.1.6：插件 → 可配置插件 → 模型代理；DSH ≥ 0.1.7：插件 → 模型代理）的「走代理的模型」列表里，每行有「测试连接」按钮，点击即向该模型发一次最小探测请求（走插件自己的全局 dispatcher，即真实代理路径）：
+**最快方式**：设置页（插件 → 模型代理）的「走代理的模型」列表里，每行有「测试连接」按钮，点击即向该模型发一次最小探测请求（走插件自己的全局 dispatcher，即真实代理路径）：
 
 - ✓ 连接成功：显示 `状态 · 耗时 · 经代理/直连 · 多模态已开启`（如 `✓ 连接成功 · 200 · 38ms · 经代理 · 多模态已开启`）
 - ✗ 连接失败：直接显示脱敏后的提供方错误原因（认证失败、限流、`max_tokens` 限制等），一眼定位问题

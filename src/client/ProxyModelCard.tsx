@@ -1,12 +1,18 @@
 /**
- * 模型代理 plugin card: one card inside 设置 → 插件 → 可配置插件
- * (the `settings.plugin.item` slot, declared at runtime by
- * @deepseek-ai/dsh-client-ui-settings-plugins). The header names the plugin
- * and discloses the configurable items in place — the proxy endpoint
+ * 模型代理 plugin card: one entry in 设置 → 插件 (the root list slot
+ * `plugins.item`, declared at runtime by @deepseek-ai/dsh-client-ui-plugin-manager
+ * on dsh ≥ 0.1.7). The host renders this slot three times — twice as inline
+ * `{ view: 'summary' }` copy (list row + detail header) and once as the
+ * `{ view: 'page' }` detail body, which is the only interactive rendering.
+ *
+ * The page discloses the configurable items in place: the proxy endpoint
  * (host + port), the 走代理的模型 multi-select (populated from the configured
- * model list via the host bridge), and the retry policy (retries + interval).
- * Written through the llm-proxy settings scope (official path with the rc.6
- * bridge fallback). Changes apply live on the host — no restart needed.
+ * model list via the host bridge) and the retry policy. Writes go through the
+ * official `configForms` document, with the loopback bridge as the fallback
+ * while that service is not reachable. Changes apply live — no restart needed.
+ *
+ * Model input modalities are NOT configurable here: DSH's own 模型列表 settings
+ * page owns them from 0.1.7 on, so the card only points there.
  *
  * Everything else stays on the DIRECT path by default; only the selected
  * models' baseURL hosts route through the proxy. Loopback is always direct.
@@ -37,13 +43,6 @@ export interface ProxyModelCardInjected {
   useSnapshot: () => ProxyModelSnapshot
   /** Card copy. */
   t: (key: keyof typeof en) => string
-  /**
-   * True on hosts where DSH itself owns model input modalities (≥ 0.1.7: the
-   * built-in 模型列表 page writes `inputModalities`). The multimodal switch is
-   * then inert — the host half stands its mirror down — so the card hides it
-   * and explains where the control lives now.
-   */
-  modalityOwnedByHost: boolean
 }
 
 /**
@@ -80,7 +79,6 @@ interface ProxyConfig {
   proxyHost: string
   proxyPort: number
   proxiedModels: string[]
-  multimodalModels: string[]
   retries: number
   retryIntervalMs: number
   failoverEnabled: boolean
@@ -94,7 +92,6 @@ const DEFAULTS: ProxyConfig = {
   proxyHost: '127.0.0.1',
   proxyPort: 7897,
   proxiedModels: [],
-  multimodalModels: [],
   retries: 3,
   retryIntervalMs: 1000,
   failoverEnabled: true,
@@ -108,7 +105,6 @@ const UI_FIELDS = [
   'proxyHost',
   'proxyPort',
   'proxiedModels',
-  'multimodalModels',
   'retries',
   'retryIntervalMs',
   'failoverEnabled',
@@ -122,7 +118,6 @@ interface FormState {
   proxyHost: string
   proxyPort: string
   proxiedModels: string[]
-  multimodalModels: string[]
   retries: string
   retryIntervalMs: string
   failoverEnabled: boolean
@@ -142,7 +137,6 @@ function emptyForm(): FormState {
     proxyHost: '',
     proxyPort: String(DEFAULTS.proxyPort),
     proxiedModels: [],
-    multimodalModels: [],
     retries: String(DEFAULTS.retries),
     retryIntervalMs: String(DEFAULTS.retryIntervalMs),
     failoverEnabled: DEFAULTS.failoverEnabled,
@@ -158,7 +152,6 @@ function formFromConfig(value: ProxyConfig): FormState {
     proxyHost: value.proxyHost ?? '',
     proxyPort: String(value.proxyPort ?? DEFAULTS.proxyPort),
     proxiedModels: [...(value.proxiedModels ?? [])],
-    multimodalModels: [...(value.multimodalModels ?? [])],
     retries: String(value.retries ?? DEFAULTS.retries),
     retryIntervalMs: String(value.retryIntervalMs ?? DEFAULTS.retryIntervalMs),
     failoverEnabled: value.failoverEnabled ?? DEFAULTS.failoverEnabled,
@@ -174,7 +167,6 @@ function fieldFromForm(form: FormState, field: (typeof UI_FIELDS)[number]): unkn
     case 'proxyHost': return form.proxyHost.trim()
     case 'proxyPort': return Number(form.proxyPort)
     case 'proxiedModels': return [...form.proxiedModels]
-    case 'multimodalModels': return [...form.multimodalModels]
     case 'retries': return Number(form.retries)
     case 'retryIntervalMs': return Number(form.retryIntervalMs)
     case 'failoverEnabled': return form.failoverEnabled === true
@@ -225,7 +217,6 @@ function mergeDefaults(base: Partial<ProxyConfig> | undefined): ProxyConfig {
     proxyHost: base?.proxyHost ?? DEFAULTS.proxyHost,
     proxyPort: base?.proxyPort ?? DEFAULTS.proxyPort,
     proxiedModels: base?.proxiedModels ?? DEFAULTS.proxiedModels,
-    multimodalModels: base?.multimodalModels ?? DEFAULTS.multimodalModels,
     retries: base?.retries ?? DEFAULTS.retries,
     retryIntervalMs: base?.retryIntervalMs ?? DEFAULTS.retryIntervalMs,
     failoverEnabled: base?.failoverEnabled ?? DEFAULTS.failoverEnabled,
@@ -270,7 +261,7 @@ function TextField(props: {
 
 /** The card body: the configurable items form plus the save/reset footer. */
 function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
-  const { scope, useSnapshot, t, modalityOwnedByHost } = props
+  const { scope, useSnapshot, t } = props
   const snapshot = useSnapshot()
   const [form, setForm] = useState<FormState>(() => emptyForm())
   const [saving, setSaving] = useState(false)
@@ -358,13 +349,6 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
     setForm({ ...form, proxiedModels: selected })
   }
 
-  const toggleMultimodal = (key: string): void => {
-    setSaved(false)
-    const selected = form.multimodalModels.includes(key)
-      ? form.multimodalModels.filter((k) => k !== key)
-      : [...form.multimodalModels, key]
-    setForm({ ...form, multimodalModels: selected })
-  }
 
   const handleTest = async (key: string): Promise<void> => {
     setTestingKey(key)
@@ -380,7 +364,6 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
       if (typeof result.status === 'number') parts.push(String(result.status))
       if (typeof result.latencyMs === 'number') parts.push(`${result.latencyMs}ms`)
       parts.push(result.viaProxy ? t('testViaProxy') : t('testDirect'))
-      if (result.multimodal) parts.push(t('testMultimodalOn'))
       return parts.length > 0 ? ` · ${parts.join(' · ')}` : ''
     }
     return `：${result.message ?? result.code ?? t('testFail')}`
@@ -497,64 +480,12 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
         )}
       </div>
 
-      {modalityOwnedByHost
-        ? (
-          // ≥ 0.1.7: DSH's own 模型列表 page owns `inputModalities`; this switch
-          // no longer reaches anything (the host mirror stands down), so it is
-          // replaced by a pointer to the control that does work.
-          <div className={styles.field} data-testid="multimodal-owned-hint">
-            <span className={styles.fieldLabel}>{t('fieldMultimodalModels')}</span>
-            <span className={styles.fieldHint}>{t('multimodalOwnedHint')}</span>
-          </div>
-        )
-        : (
-      <div className={styles.field}>
+      {/* dsh ≥ 0.1.7 owns model input modalities in the built-in 模型列表 page,
+          so this plugin's switch would be inert; point at the real control. */}
+      <div className={styles.field} data-testid="multimodal-owned-hint">
         <span className={styles.fieldLabel}>{t('fieldMultimodalModels')}</span>
-        <span className={styles.fieldHint}>{t('fieldMultimodalModelsHint')}</span>
-        {modelsError !== null
-          ? <p className={styles.status}>{modelsError}</p>
-          : models.length === 0
-            ? <p className={styles.status}>{t('statusLoading')}</p>
-            : (
-              <ul className={styles.rowList}>
-                {form.multimodalModels.map((key) => {
-                  const row = models.find((m) => m.key === key)
-                  return (
-                    <li key={key} className={styles.row}>
-                      <span className={styles.rowLabel}>{row ? rowLabel(row) : key}</span>
-                      <button
-                        type="button"
-                        className={styles.rowRemove}
-                        data-testid="remove-multimodal-model"
-                        onClick={() => toggleMultimodal(key)}
-                      >
-                        {t('remove')}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-        <select
-          className={styles.select}
-          data-testid="add-multimodal-model"
-          value=""
-          disabled={models.length === 0}
-          onChange={(event) => {
-            if (event.target.value !== '') toggleMultimodal(event.target.value)
-          }}
-        >
-          <option value="">{t('selectModel')}</option>
-          {models
-            .filter((row) => !form.multimodalModels.includes(row.key))
-            .map((row) => (
-              <option key={row.key} value={row.key}>
-                {rowLabel(row)}{row.inputModalities.includes('image') ? `（${t('multimodalBadge')}）` : ''}
-              </option>
-            ))}
-        </select>
+        <span className={styles.fieldHint}>{t('multimodalOwnedHint')}</span>
       </div>
-        )}
 
       <div className={styles.fieldRow}>
         <TextField
@@ -714,14 +645,7 @@ export function ProxyModelCard(props: ProxyModelCardProps): ReactNode {
         </span>
         <ChevronDown className={styles.chevron + (open ? ` ${styles.chevronOpen}` : '')} />
       </button>
-      {open && (
-        <CardBody
-          scope={scope}
-          useSnapshot={useSnapshot}
-          t={t}
-          modalityOwnedByHost={props.modalityOwnedByHost}
-        />
-      )}
+      {open && <CardBody scope={scope} useSnapshot={useSnapshot} t={t} />}
     </li>
   )
 }

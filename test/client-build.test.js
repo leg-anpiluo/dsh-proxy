@@ -1,7 +1,7 @@
 /**
  * Client-bundle build check: verifies lib/client.js exists (run `npm run
- * build` first) and carries the loader handoff, the plugin id, both settings
- * surfaces (pre-0.1.7 keyed slot and 0.1.7+ root list slot) and the
+ * build` first) and carries the loader handoff, the plugin id, the 0.1.7+ root
+ * list slot (the support floor — the pre-0.1.7 keyed slot must be gone) and the
  * apply/inject exports the shell expects.
  */
 import { test } from 'node:test'
@@ -14,10 +14,9 @@ test('client bundle is built and well-formed', () => {
   const source = readFileSync(path, 'utf8')
   assert.ok(source.includes('window.__ModuleLoader__.load'), 'loader handoff present')
   assert.ok(source.includes('"@anpiluo/dsh-proxy"'), 'scoped bundle id stamped')
-  // dsh ≤ 0.1.6: keyed slot, dispatched by the registered settings namespace.
-  assert.ok(source.includes('settings.plugin.item'), 'settings.plugin.item card registration present')
-  assert.ok(source.includes('"llm-proxy"'), 'namespace key present')
-  // dsh ≥ 0.1.7: root list slot declared by dsh-client-ui-plugin-manager, and
+  // Support floor is dsh 0.1.7: the pre-0.1.7 keyed slot is gone for good.
+  assert.ok(!source.includes('settings.plugin.item'), 'legacy settings.plugin.item registration removed')
+  // Root list slot declared by dsh-client-ui-plugin-manager, and
   // the settings document addressed by Loader entry id via configForms.
   assert.ok(source.includes('plugins.item'), 'plugins.item card registration present')
   assert.ok(source.includes('configForms'), 'configForms settings service used')

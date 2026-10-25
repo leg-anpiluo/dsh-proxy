@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.2.0-alpha.1 (2026-10-25)
+
+**支持范围收窄（破坏性）+ 相应删码：DSH 下限抬到 0.1.7。** 预发布版本，未打正式版号；0.1.x 用户请留在 `@anpiluo/dsh-proxy@2.1.x`。
+
+- **支持范围变更**：0.1.0–0.1.6 不再支持。判据（已逐版本实测）：0.1.7-rc.2 是第一个同时具备 `configForms` 服务、`plugins.item` 根列表槽、volatile Config 文档模型，且由内置「模型列表」页接管 `inputModalities` 的版本。低于下限时宿主半边打一条明确日志后保持不介入（不崩、不装 dispatcher），客户端不再注册旧槽位。
+- **删除多模态镜像（整个特性）**：`multimodalModels` 配置项、宿主侧 `syncMultimodal`（约 180 行：向 pi-ai 的 `models[].input` 与 deepseek 的 `models[].inputModalities` 回写）、以及设置卡里的整块多选 UI 全部移除。原因：≥ 0.1.7 由 DSH 自己的模型列表页拥有输入类型，两个写者会互相覆盖。设置卡改为一行提示，指明去官方页配置。
+- **删除客户端旧世代路径**：`settingsScope.bind()` 分支、`isBinderFace`、旧 keyed 槽 `settings.plugin.item` 的注册与其 `ui-settings-plugins` 类型依赖。设置文档固定经 `configForms` 按 loader entry id 寻址；服务尚未就绪时仍回落到本包回环桥（不 throw）。
+- **删除宿主旧世代路径**：`settings.register()` / `scope.watch()` 分支与 `volatileDocumentSeam` 适配器（仅用于把新服务投影成旧形状）全部移除；热更新改为直接订阅 `loader/volatile-update` 后重读 live accessor。`lib/index.js` 881 → 约 640 行。
+- 保留：`live()` 里 `extra('volatile', true)` 的兜底——它防的是依赖树里被提升的**旧 schemastery 副本**，不是宿主代际，故不算旧版支持。
+- 测试：删除 `test/multimodal-mirror.test.js`；`settings` / `retry-mirror` / `volatile-settings` 的夹具改为新契约（假 seam 去掉 `register`，live 更新改由 `loader/volatile-update` 驱动，写操作落在 apply 拿到的同一份 config 上）；新增「≤0.1.6 风格宿主被明确拒绝」用例。`client-build` / `client-shape-check` 改为断言**旧槽位已消失**。单测 106/106、client 17 项。
+
 ## v2.1.1 (2026-10-25)
 
 **DSH 0.2.1 兼容复核 + 直连回退在真实网络下不触发的修复 + 多模态开关按宿主能力隐藏。** 无配置迁移。

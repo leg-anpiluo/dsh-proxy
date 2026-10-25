@@ -41,7 +41,7 @@ function merge(base, user) {
 }
 
 /** A fake host settings seam with register/get/watch/describe/mutate. */
-function makeFakeSeam({ base = {}, conflict = false, writable = true, extraNamespaces = [] } = {}) {
+function makeFakeSeam({ base = {}, conflict = false, writable = true, extraNamespaces = [], emit = null } = {}) {
   const user = {}
   let revision = 0
   const watchers = new Set()
@@ -54,24 +54,12 @@ function makeFakeSeam({ base = {}, conflict = false, writable = true, extraNames
   const seam = {
     writable,
     documentPath: 'fake-settings.yaml',
-    register(ns, schema, options) {
-      registered.add(String(ns))
-      return {
-        get: () => resolved(),
-        watch(callback) {
-          watchers.add(callback)
-          return () => watchers.delete(callback)
-        },
-        update() { throw new Error('not used') },
-        replace() { throw new Error('not used') },
-      }
-    },
     describe({ redactSecrets } = {}) {
       assert.ok(redactSecrets === true || redactSecrets === undefined, 'describe options must be redact or absent')
       return descriptors
     },
     async mutate(ns, ops, expectedRevision) {
-      assert.equal(String(ns), 'llm-proxy')
+      if (String(ns) !== 'llm-proxy') return // provider-namespace writes (retryPolicy mirror)
       if (conflict) throw new SettingsConflictError('stale revision')
       for (const op of ops) {
         const [field] = op.path
@@ -80,8 +68,9 @@ function makeFakeSeam({ base = {}, conflict = false, writable = true, extraNames
       }
       revision += 1
       descriptors[0] = { ns: 'llm-proxy', schema: {}, value: resolved(), base, user: { ...user }, revision }
-      const next = resolved()
-      for (const callback of watchers) void callback(next)
+      // dsh ≥ 0.1.7 announces a committed write as `loader/volatile-update`
+      // on the plugin fiber; the plugin then re-reads the live accessors.
+      emit?.('loader/volatile-update')
     },
   }
   return { seam, state: { user, revision, registered, watchers } }
@@ -90,13 +79,19 @@ function makeFakeSeam({ base = {}, conflict = false, writable = true, extraNames
 /** Fake cordis ctx that resolves an inject([...]) callback synchronously. */
 function makeCtx({ seam, webServer = true }) {
   const calls = []
+  const listeners = new Map()
+  const emit = (ev) => { for (const fn of listeners.get(ev) ?? []) fn() }
   const ctx = {
     logger: {
       info: (m) => calls.push(['info', m]),
       warn: (m) => calls.push(['warn', m]),
       error: (m) => calls.push(['error', m]),
     },
-    on: (ev, fn) => calls.push(['on', ev, typeof fn]),
+    on: (ev, fn) => {
+      calls.push(['on', ev, typeof fn])
+      listeners.set(ev, [...(listeners.get(ev) ?? []), fn])
+      return () => {}
+    },
     inject: typeof seam === 'function'
       ? (services, callback) => {
           assert.ok(Array.isArray(services) && services.includes('settings'), 'inject waits for settings')
@@ -111,7 +106,7 @@ function makeCtx({ seam, webServer = true }) {
         }
       : undefined,
   }
-  return { ctx, calls }
+  return { ctx, calls, emit }
 }
 
 /** A typical llm-pi-ai namespace view (b.ai-style provider + domestic provider). */
@@ -163,32 +158,40 @@ test('Config defaults match the documented v4 shape', () => {
   assert.equal(cfg.retryIntervalMs, 1000)
 })
 
-test('apply registers the settings namespace and installs the dispatcher (live)', async () => {
+test('apply installs from the volatile document and mounts the bridge', async () => {
   const base = resolveConfig({ proxiedModels: ['deepseek-v4-flash/deepseek-v4-flash'] })
-  const { seam, state } = makeFakeSeam({ base, extraNamespaces: [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] })
+  const { seam } = makeFakeSeam({ base, extraNamespaces: [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] })
   const { ctx, calls } = makeCtx({ seam: () => seam })
   await apply(ctx, base)
-  assert.ok(state.registered.has('llm-proxy'), 'namespace llm-proxy registered')
-  assert.ok(calls.some(([kind, msg]) => kind === 'info' && msg.includes('settings namespace "llm-proxy" registered')), 'registration logged')
+  assert.ok(calls.some(([kind, msg]) => kind === 'info' && msg.includes('served from the volatile Config')), 'volatile document logged')
   const installLogs = calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher'))
-  assert.equal(installLogs.length, 1, 'initial install from resolved value')
+  assert.equal(installLogs.length, 1, 'initial install from the resolved config')
   assert.ok(installLogs[0][1].includes('api.b.ai'), 'install log shows the proxied host')
-  assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/describe`), 'describe route mounted')
-  assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/mutate`), 'mutate route mounted')
-  assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/models`), 'models route mounted')
-  assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/test`), 'test route mounted')
+  for (const route of ['describe', 'mutate', 'models', 'test']) {
+    assert.ok(calls.some(([kind, path]) => kind === 'route' && path === `${SETTINGS_BRIDGE_PREFIX}/${route}`), `${route} route mounted`)
+  }
 })
 
-test('watch re-applies the dispatcher on committed changes', async () => {
+test('a loader/volatile-update re-applies the dispatcher', async () => {
   const base = resolveConfig({})
-  const { seam, state } = makeFakeSeam({ base, extraNamespaces: [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] })
-  const { ctx, calls } = makeCtx({ seam: () => seam })
+  const { seam } = makeFakeSeam({ base, extraNamespaces: [PI_AI_NAMESPACE, DEEPSEEK_NAMESPACE] })
+  const { ctx, calls, emit } = makeCtx({ seam: () => seam })
   await apply(ctx, base)
-  const before = calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher')).length
-  // Commit a change through the seam (as the bridge mutate would).
-  await seam.mutate(LLM_PROXY_NAMESPACE, [{ op: 'set', path: ['proxiedModels'], value: ['deepseek-v4-flash/deepseek-v4-flash'] }], undefined)
-  const after = calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher')).length
-  assert.equal(after, before + 1, 'one re-install per committed change')
+  const count = () => calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher')).length
+  const before = count()
+  emit('loader/volatile-update')
+  assert.equal(count(), before + 1, 'one re-install per committed change')
+})
+
+test('an unsupported (≤0.1.6 style) host is refused loudly and stays inert', async () => {
+  const legacySeam = { register: () => ({ get: () => ({}), watch: () => () => {} }), describe: () => [], mutate: async () => {} }
+  const { ctx, calls } = makeCtx({ seam: () => legacySeam })
+  await apply(ctx, resolveConfig({}))
+  assert.ok(
+    calls.some(([kind, msg]) => kind === 'error' && msg.includes('requires dsh >= 0.1.7')),
+    'floor violation is logged with a pointer to 2.1.x',
+  )
+  assert.equal(calls.filter(([kind, msg]) => kind === 'info' && msg.includes('RoutingDispatcher')).length, 0, 'no install on an unsupported host')
 })
 
 test('apply falls back to patch config without a settings seam', async () => {
@@ -255,7 +258,7 @@ test('bridge mutate persists ops and returns the updated view', async () => {
     ns: 'llm-proxy',
     ops: [{ op: 'set', path: ['proxyPort'], value: 7898 }],
   })
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, true, JSON.stringify(result))
   assert.equal(state.user.proxyPort, 7898)
   assert.equal(result.value.value.proxyPort, 7898)
   assert.equal(typeof result.value.revision, 'number')

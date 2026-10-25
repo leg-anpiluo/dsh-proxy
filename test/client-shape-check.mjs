@@ -6,9 +6,8 @@ const checks = {
   'scoped bundle id': /load\(\{\s*id: "@anpiluo\/dsh-proxy"/.test(s),
   'apply exported': /exports\.apply\s*=/.test(s),
   'inject exported': /exports\.inject\s*=/.test(s),
-  // dsh ≤ 0.1.6 surface: keyed slot + registered namespace.
-  'settings.plugin.item registered': s.includes('settings.plugin.item'),
-  'namespace key llm-proxy': s.includes('"llm-proxy"'),
+  // Support floor moved to dsh 0.1.7: the pre-0.1.7 keyed slot must be gone.
+  'legacy settings.plugin.item absent': !s.includes('settings.plugin.item'),
   // dsh ≥ 0.1.7 surface: root list slot + entry-id addressed document.
   'plugins.item registered': s.includes('plugins.item'),
   'configForms service used': s.includes('configForms'),
@@ -21,6 +20,7 @@ const checks = {
   'summary copy present': s.includes('个模型走代理'),
   // ≥ 0.1.7: DSH owns model input modalities → the switch is replaced by a hint.
   'modality-owned hint': s.includes('multimodal-owned-hint'),
+  'multimodal mirror fields absent': !s.includes('multimodalModels:'),
   'direct failover deadline field': s.includes('field-direct-failover-timeout'),
   'directFailoverTimeoutMs wired': s.includes('directFailoverTimeoutMs'),
   // The settings document is bound from the slot callback, not during apply().

@@ -431,11 +431,6 @@ function createCompatScope(primary: OfficialScopeFace, fetchFn: typeof fetch): P
   }
 }
 
-/** True when the value exposes the official settings binder's bind() seam. */
-function isBinderFace(value: unknown): value is { bind(spec: { namespace: string }): OfficialScopeFace } {
-  return typeof value === 'object' && value !== null && typeof (value as { bind?: unknown }).bind === 'function'
-}
-
 /**
  * The per-entry form dsh ≥ 0.1.7's `configForms` service returns.
  *
@@ -528,21 +523,20 @@ export class LlmProxySettingsBinder extends Service {
     const ctx = this.ctx
     const bridge = (): ProxyModelScope => new BridgeScopeController((input, init) => fetch(input, init))
 
+    // dsh ≥ 0.1.7 only: the document is addressed by the Loader entry id through
+    // the official `configForms` service. The pre-0.1.7 `settingsScope` binder is
+    // gone from the host, and this release dropped support for that generation.
     const forms = configFormsOf(ctx)
     let primary: OfficialScopeFace | undefined
-    let documentKey = LLM_PROXY_NAMESPACE
+    const documentKey = LLM_PROXY_ENTRY_ID
     if (forms !== undefined) {
       primary = officialFaceOf(forms.get(LLM_PROXY_ENTRY_ID))
-      documentKey = LLM_PROXY_ENTRY_ID
       this.officialDocument = true
-    } else {
-      const official = ctx.get('settingsScope') as unknown
-      if (isBinderFace(official)) primary = official.bind({ namespace: LLM_PROXY_NAMESPACE })
     }
 
-    // No official document at all: stay on the bridge instead of throwing.
-    // Throwing here would abort this plugin's apply() and take the whole
-    // client plugin down (dsh ≥ 0.1.7 no longer provides `settingsScope`).
+    // No official document reachable (service not up yet, or a host without it):
+    // stay on the bridge instead of throwing — throwing would abort apply() and
+    // take the whole client plugin down.
     const scope = primary === undefined
       ? bridge()
       : createCompatScope(primary, (input, init) => fetch(input, init))

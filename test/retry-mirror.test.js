@@ -20,6 +20,11 @@ const resolveConfig = (patch) => plainProxyConfig(Config(patch))
 
 import { __resetCatalogForTest, __setCatalogForTest } from '../lib/catalog.js'
 
+/** dsh ≥ 0.1.7 announces committed settings writes as `loader/volatile-update`. */
+const volatileListeners = new Set()
+const emitVolatile = () => { for (const fn of volatileListeners) fn() }
+
+
 /** Flush pending microtasks/macrotasks so fire-and-forget async settles. */
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -58,18 +63,6 @@ function makeMirrorSeam({ base }) {
   const seam = {
     writable: true,
     documentPath: 'fake-settings.yaml',
-    register(ns) {
-      registered.add(String(ns))
-      return {
-        get: () => ({ ...base, ...proxyUser }),
-        watch(callback) {
-          watchers.add(callback)
-          return () => watchers.delete(callback)
-        },
-        update() { throw new Error('not used') },
-        replace() { throw new Error('not used') },
-      }
-    },
     describe() {
       return [
         { ns: 'llm-proxy', schema: {}, value: { ...base, ...proxyUser } },
@@ -80,11 +73,14 @@ function makeMirrorSeam({ base }) {
       if (String(ns) === 'llm-proxy') {
         for (const op of ops) {
           const [field] = op.path
-          if (op.op === 'set') proxyUser[field] = op.value
-          else delete proxyUser[field]
+          // The loader commits a settings write into the LIVE config accessors,
+          // which plainProxyConfig() reads — mirror that by writing the same
+          // object `apply()` was handed.
+          if (op.op === 'set') { proxyUser[field] = op.value; base[field] = op.value }
+          else { delete proxyUser[field]; delete base[field] }
         }
         const next = { ...base, ...proxyUser }
-        for (const callback of watchers) void callback(next)
+        emitVolatile()
       } else {
         assert.equal(String(ns), 'llm-pi-ai')
         for (const op of ops) {
@@ -111,7 +107,10 @@ function makeCtx({ seam }) {
       warn: (m) => calls.push(['warn', m]),
       error: (m) => calls.push(['error', m]),
     },
-    on: () => () => {},
+    on: (ev, fn) => {
+      if (ev === 'loader/volatile-update') volatileListeners.add(fn)
+      return () => volatileListeners.delete(fn)
+    },
     inject(services, callback) {
       const sctx = { effect: () => {} }
       for (const service of services) {
@@ -216,18 +215,6 @@ function makeCatalogSeam({ base }) {
   const seam = {
     writable: true,
     documentPath: 'fake-settings.yaml',
-    register(ns) {
-      registered.add(String(ns))
-      return {
-        get: () => ({ ...base, ...proxyUser }),
-        watch(callback) {
-          watchers.add(callback)
-          return () => watchers.delete(callback)
-        },
-        update() { throw new Error('not used') },
-        replace() { throw new Error('not used') },
-      }
-    },
     describe() {
       return [
         { ns: 'llm-proxy', schema: {}, value: { ...base, ...proxyUser } },
@@ -238,11 +225,14 @@ function makeCatalogSeam({ base }) {
       if (String(ns) === 'llm-proxy') {
         for (const op of ops) {
           const [field] = op.path
-          if (op.op === 'set') proxyUser[field] = op.value
-          else delete proxyUser[field]
+          // The loader commits a settings write into the LIVE config accessors,
+          // which plainProxyConfig() reads — mirror that by writing the same
+          // object `apply()` was handed.
+          if (op.op === 'set') { proxyUser[field] = op.value; base[field] = op.value }
+          else { delete proxyUser[field]; delete base[field] }
         }
         const next = { ...base, ...proxyUser }
-        for (const callback of watchers) void callback(next)
+        emitVolatile()
       } else {
         assert.equal(String(ns), 'llm-pi-ai')
         for (const op of ops) {

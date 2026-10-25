@@ -5,14 +5,14 @@
  * addressed by the Loader entry id, and a committed write re-reads the live
  * accessors and emits `loader/volatile-update` on this fiber —
  * `settings.register()`/`watch()` no longer exist. These tests pin the
- * adaptation layer (`plainProxyConfig` + `volatileDocumentSeam`) and the
+ * adaptation layer (`plainProxyConfig`) and the
  * end-to-end `apply()` behaviour on such a host, including the two behaviours
  * that differ from the old host: the multimodal mirror stands down, and the
  * settings document is addressed by entry id rather than namespace.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { apply, Config, plainProxyConfig, volatileDocumentSeam } from '../lib/index.js'
+import { apply, Config, plainProxyConfig } from '../lib/index.js'
 
 /** A live accessor as dsh 0.1.7 hands a volatile Config field to apply(). */
 const live = (value) => ({ get: () => value })
@@ -110,36 +110,6 @@ test('plainProxyConfig unwraps live accessors and keeps plain values', () => {
   assert.equal(plainProxyConfig(undefined).proxyHost, '127.0.0.1')
 })
 
-test('volatileDocumentSeam maps register/watch onto the live document', () => {
-  const events = []
-  const ctx = {
-    on: (event, fn) => {
-      assert.equal(event, 'loader/volatile-update')
-      events.push(fn)
-      return () => { events.splice(events.indexOf(fn), 1) }
-    },
-  }
-  const seam = makeVolatileSeam()
-  // The loader commits a write INTO the accessor's cell; model that with a
-  // mutable holder rather than a captured constant.
-  const cell = { value: '127.0.0.1' }
-  const facade = volatileDocumentSeam(seam, ctx, { proxyHost: { get: () => cell.value } })
-  // describe/mutate are delegated verbatim to the real service.
-  assert.deepEqual(facade.describe({ redactSecrets: true }), [])
-
-  const scope = facade.register('llm-proxy', Config, {})
-  assert.equal(scope.get().proxyHost, '127.0.0.1', 'get() reads the live accessor')
-
-  const seen = []
-  const dispose = scope.watch((next) => seen.push(next.proxyHost))
-  cell.value = '10.0.0.9'
-  for (const fn of events) fn(['proxyHost'])
-  assert.deepEqual(seen, ['10.0.0.9'], 'watch re-reads after a volatile commit')
-
-  dispose()
-  assert.equal(events.length, 0, 'dispose removes the loader listener')
-})
-
 test('apply on a 0.1.7 host installs from the volatile document and re-applies live', async () => {
   const descriptors = [
     {
@@ -165,7 +135,6 @@ test('apply on a 0.1.7 host installs from the volatile document and re-applies l
     proxyHost: live('127.0.0.1'),
     proxyPort: live(7897),
     proxiedModels: live(['deepseek-v4-flash/deepseek-v4-flash']),
-    multimodalModels: live(['deepseek-v4-flash-vision-exp/deepseek-v4-flash-vision-exp']),
     retries: live(3),
     retryIntervalMs: live(1000),
     trustedOrigins: live([]),
@@ -184,13 +153,6 @@ test('apply on a 0.1.7 host installs from the volatile document and re-applies l
   assert.ok(!calls.some(([kind, msg]) => kind === 'warn' && String(msg).includes('settings seam unavailable')), 'not treated as a missing seam')
   // The bridge stays mounted for the card's model list and connection test.
   assert.ok(calls.some(([kind, path]) => kind === 'route' && path === '/api/dsh-proxy/settings/models'), 'models route mounted')
-  // The multimodal mirror stands down on the new host (the official model
-  // settings page owns input modalities there).
-  assert.ok(
-    calls.some(([kind, msg]) => kind === 'info' && msg.includes('owns model input modalities')),
-    'multimodal mirror stand-down logged',
-  )
-
   // A committed settings write mutates the live accessors and emits the event.
   config.proxiedModels = live([])
   emit('loader/volatile-update', ['proxiedModels'])

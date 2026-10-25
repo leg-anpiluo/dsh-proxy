@@ -1,39 +1,165 @@
 # @anpiluo/dsh-proxy — release publish via npm Trusted Publishing (OIDC).
 #
-# No long-lived npm token: the job exchanges the GitHub-issued OIDC token for
-# a short-lived publish credential. Requires the trusted publisher configured
-# on npmjs.com (package → Trusted Publisher → GitHub Actions):
+# No long-lived npm token: the job exchanges the GitHub-issued OIDC token for a
+# short-lived publish credential. Requires the trusted publisher configured on
+# npmjs.com (package → Trusted Publisher → GitHub Actions):
 #   Organization or user: leg-anpiluo
 #   Repository:           dsh-proxy
 #   Workflow filename:    publish.yml
-#   Allowed actions:      check "npm publish" (post-Sep-2026 configs default
-#                         to `npm stage publish` only)
+#   Allowed actions:      check "npm publish"
 #
 # Release flow: bump version + CHANGELOG → commit → `git tag vX.Y.Z` →
-# `git push fork master --tags`. npm CLI >= 11.5.1 (node 24 ships it) uses
+# `git push origin master --tags`. npm CLI >= 11.5.1 (node 24 ships it) uses
 # trusted publishing automatically when no token auth is present.
+#
+# **Prereleases never take `latest`.** The dist-tag is derived from the version:
+#   2.2.0        → latest
+#   2.2.0-alpha.1 → alpha      (also what `npm i pkg@alpha` resolves)
+#   2.2.0-beta.2  → beta
+#   2.2.0-rc.3    → rc
+# Publishing `2.2.0-alpha.1` as `latest` would hand every `npm i` user an
+# unfinished build, which is the one mistake this gate exists to prevent.
+#
+# Guards, all of them failing the run loudly instead of publishing something
+# surprising: tag must equal package.json version; the tagged commit must be on
+# master; the version must not already exist on the registry; a prerelease may
+# not be tagged `latest`.
+#
+# Manual runs (`workflow_dispatch`) default to a dry run: they build the tarball
+# and stop, so a release can be rehearsed without burning the version number.
 name: publish
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (build the tarball, do not publish)'
+        type: boolean
+        default: true
+      dist_tag:
+        description: 'Override the npm dist-tag (empty = derive from the version)'
+        type: string
+        required: false
 
 permissions:
-  id-token: write # OIDC token for npm trusted publishing
+  id-token: write # OIDC token for npm trusted publishing + provenance
   contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Approve releases in the repo settings (Settings → Environments → npm).
+    environment: npm
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false # never cache release builds
+
+      - name: Read the version and check the tag matches
+        id: meta
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          NAME="$(node -p "require('./package.json').name")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            # A misplaced tag publishing the wrong version is unrecoverable
+            # (npm forbids republishing a version), so compare first.
+            if [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} does not match package.json ${VERSION}"
+              exit 1
+            fi
+          fi
+          echo "::notice::releasing ${NAME}@${VERSION}"
+
+      - name: Ensure the release commit is on master
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/master:refs/remotes/origin/master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/master; then
+            echo "::error::tagged commit $GITHUB_SHA is not on master"
+            exit 1
+          fi
+
+      - name: Derive the npm dist-tag
+        id: dist
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.meta.outputs.version }}"
+          OVERRIDE="${{ inputs.dist_tag }}"
+          if [ -n "$OVERRIDE" ]; then
+            DIST_TAG="$OVERRIDE"
+          elif [[ "$VERSION" == *-* ]]; then
+            PRE="${VERSION#*-}"   # alpha.1 / beta.2 / rc.3
+            DIST_TAG="${PRE%%.*}" # alpha / beta / rc
+          else
+            DIST_TAG="latest"
+          fi
+          if [[ "$VERSION" == *-* && "$DIST_TAG" == "latest" ]]; then
+            echo "::error::prerelease ${VERSION} must not be published as latest"
+            exit 1
+          fi
+          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "::notice::dist-tag = ${DIST_TAG}"
+
+      - name: Refuse to reuse a published version
+        run: |
+          set -euo pipefail
+          NAME="${{ steps.meta.outputs.name }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "::error::${NAME}@${VERSION} is already on the registry"
+            exit 1
+          fi
+
       - run: npm ci
       - run: npm run build
       - run: npm test
       - run: npm run typecheck
-      - run: npm publish
+      - run: npm run test:client
+      - run: node test/externals-check.mjs
+      - run: npm run test:smoke
+
+      - name: Publish
+        env:
+          DIST_TAG: ${{ steps.dist.outputs.dist_tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          ARGS=(--access public --tag "$DIST_TAG")
+          # Manual runs default to a rehearsal; provenance needs a real publish.
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "::notice::dry run — building the tarball only"
+            npm publish --dry-run --tag "$DIST_TAG"
+            exit 0
+          fi
+          npm publish "${ARGS[@]}" --provenance
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### npm publish"
+            echo ""
+            echo "| field | value |"
+            echo "| --- | --- |"
+            echo "| package | ${{ steps.meta.outputs.name }} |"
+            echo "| version | ${{ steps.meta.outputs.version }} |"
+            echo "| dist-tag | ${{ steps.dist.outputs.dist_tag }} |"
+            echo "| trigger | ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME} |"
+            echo "| dry run | ${{ inputs.dry_run || 'false' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,8 +1,27 @@
 # Changelog
 
-## v2.1.0 (2026-09-29)
+## v2.1.1 (2026-10-25)
+
+**DSH 0.2.1 兼容复核 + 直连回退在真实网络下不触发的修复 + 多模态开关按宿主能力隐藏。** 无配置迁移。
+
+- **修复（重要）：直连失败自动回退在真实网络下大多不触发**。原判定是「传输错误码白名单」，而真实 undici + 真实代理实测显示，真实世界的直连失败根本不是白名单里那几种：
+
+  | 失败形态 | 真实错误码 | 旧行为 |
+  |---|---|---|
+  | 连接被拒 / DNS 失败 | `ECONNREFUSED` / `ENOTFOUND` | ✓ 回退 |
+  | **TCP 连上但无响应（黑洞）** | `UND_ERR_HEADERS_TIMEOUT` | ✗ 不回退 |
+  | **握手期干扰（TLS）** | `ERR_SSL_*` / `ERR_TLS_*` / `EPROTO` | ✗ 不回退 |
+
+  已有 smoke 只覆盖「连接被重置」，因为那是本地最容易复现的一种，于是「能回退的两种恰好是测试覆盖的两种」。现改为**精确黑名单**：只排除请求本身有错（`UND_ERR_INVALID_ARG` 等）、用户取消（abort）、调度器已销毁（`UND_ERR_DESTROYED`），其余「响应头之前发生的调度失败」一律给一次代理重放。
+  同时新增 `directFailoverTimeoutMs`（默认 30000 ms，仅 GET/HEAD）：黑洞路由原本要等 undici 默认 **300 秒**响应头超时才回退，交互式请求早被放弃——这正是「看起来没生效」的主因。慢速 POST 绝不被切断（非流式模型先「想」再答，切断会把一个正常请求换成一次重放）。
+- **多模态开关按宿主能力隐藏**：dsh ≥ 0.1.7 起模型输入类型由内置「模型列表」设置统一管理（`@deepseek-ai/dsh-client-ui-settings-models` 持有 `inputModalities`），宿主侧镜像此前已让位，但设置卡仍显示那个开关——点了没有任何效果。现该宿主上替换为一行说明（`multimodalOwnedHint`），不再提供无效控件；≤ 0.1.6 行为完全不变。
+- **DSH 0.2.1 兼容复核**（latest `0.2.1-rc.2`、next `0.2.1-rc.3`、alpha `0.2.1-alpha.5`）：`cordis-plugin-loader` 1.0.6 仍发 `loader/volatile-update`；`dsh-settings` 仍以 `volatileForm`/`isVolatile` 工作且无 `register`；`plugins.item` 仍按 `summary`×2 + `page` 渲染、`configForms.get/describe` 未变；primitives 只剩 `IconChevronDownOutlineRegular`（上轮的属性查找链正好命中，无改动）。**注意**：0.2.1 起 `dsh-client-ui-primitives`/`dsh-client-store`/`dsh-client-ui-slots` 不再作为 npm 包发布，但模块 id 仍存在于宿主自己的 client bundle 中，本包 bundle 的 externals 照旧可解析（已复核 0.2.1 产物）。
 
 **适配 DSH 0.1.7 / 0.2.0 的设置机制重构，并修复本插件在新宿主上必然启动失败的问题。** 用户现有配置（`llm-proxy` 命名空间文档、已保存的代理选择）无需迁移。
+
+- 测试：单测 **111/111**（新增回退分类用例：TLS 握手失败、`UND_ERR_HEADERS_TIMEOUT`、请求侧错误不回退、`deadlineFor` 只给 GET/HEAD、挂死 GET 到期回退、挂死 POST 绝不切断）；`test:smoke:failover` 增**黑洞直连**真机用例（accept 后不回包 → 到期回退，代理恰好命中一次）；`test:client` 17 项（增多模态提示与期限字段断言）。
+
+## v2.1.0 (2026-09-29)
 
 - **修复（严重）：客户端在 DSH ≥ 0.1.7 上打开详情页崩溃**。卡片折角图标此前按名字导入 `IconChevronDownOutline14`，而 `@deepseek-ai/dsh-client-ui-primitives` **在 0.1.7 删除了该导出**（改名 `IconChevronDownOutline` / `…Regular` / `…Medium`）。构建期 devDependency 锁在旧世代（`0.1.0-rc.7`，仍有旧名）→ 构建与类型检查全绿；运行时用的是**宿主那份** primitives → 该绑定为 `undefined` → React 抛 `Element type is invalid`，模型代理详情页整个渲染失败（列表摘要行不受影响，宿主侧代理路由也不受影响）。现改为在宿主模块对象上**按属性名查找**（`chevron.tsx`：`…14` → `…Regular` → `…Medium` → `…Outline`），并以**本地内联 SVG 兜底**——未来再改名只会退化成图标外观差异，不会再是白页。同批核对了其余运行时外部符号：`@deepseek-ai/dsh-client-store` 的 `createSnapshotStore`（0.1.2/0.1.7/0.2.0 均在）、`@deepseek-ai/cordis` 的 `Service`（4.0.4 在）均无漂移。
 - **修复（严重）：客户端在 DSH ≥ 0.1.7 上启动失败**。0.1.7 删除了 `settingsScope` 服务，而客户端把它放进了**硬 `inject`**——cordis 对已消失服务的硬注入会让该 fiber 永远 pending，宿主启动审计只报「某插件无错误文本」，表现即 renderer boot failed / 插件静默不生效。现改为**动态解析**设置服务，`inject` 只保留 `slots`/`locale`：

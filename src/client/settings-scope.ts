@@ -510,6 +510,16 @@ function officialFaceOf(form: ConfigFormFace): OfficialScopeFace {
  * the authority and the bridge is only ever a stand-in.
  */
 export class LlmProxySettingsBinder extends Service {
+  /**
+   * True when `bind()` resolved the document through the official
+   * `configForms` service — i.e. a dsh ≥ 0.1.7 host. On those hosts the built-in
+   * 模型列表 settings page owns every model's `inputModalities` and the host half
+   * of this plugin stands its mirror down (see `syncMultimodal`), so the card
+   * hides the multimodal switch rather than offering a control that changes
+   * nothing.
+   */
+  officialDocument = false
+
   constructor(ctx: Context) {
     super(ctx, 'llmProxySettings')
   }
@@ -524,6 +534,7 @@ export class LlmProxySettingsBinder extends Service {
     if (forms !== undefined) {
       primary = officialFaceOf(forms.get(LLM_PROXY_ENTRY_ID))
       documentKey = LLM_PROXY_ENTRY_ID
+      this.officialDocument = true
     } else {
       const official = ctx.get('settingsScope') as unknown
       if (isBinderFace(official)) primary = official.bind({ namespace: LLM_PROXY_NAMESPACE })

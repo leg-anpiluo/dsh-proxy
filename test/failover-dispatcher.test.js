@@ -114,6 +114,7 @@ function makeFailover(record, {
   failoverEnabled = true,
   failoverProxy = '',
   negativeCacheTtlMs = 60000,
+  directFailoverTimeoutMs = 30000,
   logs = null,
 } = {}) {
   const router = makeRouter(record, routerOpts)
@@ -123,6 +124,7 @@ function makeFailover(record, {
     failoverEnabled,
     failoverProxy,
     negativeCacheTtlMs,
+    directFailoverTimeoutMs,
     logger: logs,
   })
   return { d, router }
@@ -270,22 +272,98 @@ test('direct success clears a stale cache entry', async () => {
   assert.equal(record.filter((r) => r.agent === 'direct').length, 2)
 })
 
-test('non-transport errors propagate without failover', () => {
+test('request-side errors propagate without failover', () => {
   const record = []
   const { d } = makeFailover(record, { routerOpts: { directFailHosts: ['api.deepseek.com'] } })
-  // Script the direct agent to fail with a TLS-style certificate error —
-  // a real error, but not a transport-connect failure code.
+  // A malformed request cannot be fixed by a different egress: replaying it
+  // through the proxy would repeat the same mistake.
   const orig = d.router.direct.dispatch.bind(d.router.direct)
   d.router.direct.dispatch = (opts, handler) => orig(opts, {
     onRequestStart(c, ctx) { handler.onRequestStart?.(c, ctx) },
     onResponseError(c, _err) {
-      handler.onResponseError?.(c, Object.assign(new Error('self-signed certificate'), { code: 'DEPTH_ZERO_SELF_SIGNED_CERT' }))
+      handler.onResponseError?.(c, Object.assign(new Error('invalid argument'), { code: 'UND_ERR_INVALID_ARG' }))
     },
   })
   const h = spy()
   d.dispatch(req('https://api.deepseek.com/v1'), h)
   assert.deepEqual(record.map((r) => r.agent), ['direct'])
-  assert.deepEqual(h.events, [['reqStart'], ['error', 'DEPTH_ZERO_SELF_SIGNED_CERT']])
+  assert.deepEqual(h.events, [['reqStart'], ['error', 'UND_ERR_INVALID_ARG']])
+})
+
+/** Drive one direct attempt that fails with `code`, return proxy attempts. */
+function failWith(record, code) {
+  const { d } = makeFailover(record, { routerOpts: { directFailHosts: ['api.deepseek.com'] } })
+  const orig = d.router.direct.dispatch.bind(d.router.direct)
+  d.router.direct.dispatch = (opts, handler) => orig(opts, {
+    onRequestStart(c, ctx) { handler.onRequestStart?.(c, ctx) },
+    onResponseError(c) {
+      handler.onResponseError?.(c, Object.assign(new Error(code), { code }))
+    },
+  })
+  const h = spy()
+  d.dispatch(req('https://api.deepseek.com/v1'), h)
+  return { record, events: h.events }
+}
+
+test('a TLS handshake failure fails over (interference looks like this)', () => {
+  // Real-world direct failures during the handshake surface as TLS errors, not
+  // as ECONNREFUSED. They used to propagate untouched, which is why failover
+  // looked inert exactly where it was needed.
+  for (const code of ['ERR_SSL_WRONG_VERSION_NUMBER', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'EPROTO']) {
+    const { record, events } = failWith([], code)
+    assert.equal(record.filter((r) => String(r.agent).startsWith('proxy')).length, 1, code)
+    assert.deepEqual(events.at(-1), ['end'], code)
+  }
+})
+
+test('a blackholed direct route (headers timeout) fails over', () => {
+  // TCP accepted, nothing ever returned: undici gives up with
+  // UND_ERR_HEADERS_TIMEOUT, the commonest "direct is broken" signal here.
+  const { record, events } = failWith([], 'UND_ERR_HEADERS_TIMEOUT')
+  assert.equal(record.filter((r) => String(r.agent).startsWith('proxy')).length, 1)
+  assert.deepEqual(events.at(-1), ['end'])
+})
+
+test('deadlineFor only budgets idempotent reads', () => {
+  const record = []
+  const { d } = makeFailover(record)
+  assert.equal(d.deadlineFor({ method: 'GET' }), 30000)
+  assert.equal(d.deadlineFor({ method: 'HEAD' }), 30000)
+  assert.equal(d.deadlineFor({ method: 'get' }), 30000)
+  // A slow model thinks before its first byte; never cut those short.
+  assert.equal(d.deadlineFor({ method: 'POST' }), 0)
+  assert.equal(d.deadlineFor({ method: 'PUT' }), 0)
+  const off = makeFailover(record, { directFailoverTimeoutMs: 0 }).d
+  assert.equal(off.deadlineFor({ method: 'GET' }), 0)
+})
+
+test('a hung direct GET fails over at the deadline', async () => {
+  const record = []
+  const { d } = makeFailover(record, {
+    routerOpts: { directFailHosts: ['api.deepseek.com'] },
+    directFailoverTimeoutMs: 60,
+  })
+  // The direct agent never answers: exactly what a blackholed route does.
+  d.router.direct.dispatch = () => true
+  const h = spy()
+  d.dispatch({ origin: 'https://api.deepseek.com', path: '/x', method: 'GET', headers: [] }, h)
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  assert.equal(record.filter((r) => String(r.agent).startsWith('proxy')).length, 1)
+  assert.deepEqual(h.events.at(-1), ['end'])
+})
+
+test('a hung direct POST is never cut by the deadline', async () => {
+  const record = []
+  const { d } = makeFailover(record, {
+    routerOpts: { directFailHosts: ['api.deepseek.com'] },
+    directFailoverTimeoutMs: 60,
+  })
+  d.router.direct.dispatch = () => true
+  const h = spy()
+  d.dispatch({ origin: 'https://api.deepseek.com', path: '/x', method: 'POST', headers: [], body: '{}' }, h)
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  assert.equal(record.filter((r) => String(r.agent).startsWith('proxy')).length, 0)
+  assert.deepEqual(h.events, [])
 })
 
 test('user aborts are never failed over', () => {

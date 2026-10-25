@@ -37,6 +37,13 @@ export interface ProxyModelCardInjected {
   useSnapshot: () => ProxyModelSnapshot
   /** Card copy. */
   t: (key: keyof typeof en) => string
+  /**
+   * True on hosts where DSH itself owns model input modalities (≥ 0.1.7: the
+   * built-in 模型列表 page writes `inputModalities`). The multimodal switch is
+   * then inert — the host half stands its mirror down — so the card hides it
+   * and explains where the control lives now.
+   */
+  modalityOwnedByHost: boolean
 }
 
 /**
@@ -79,6 +86,7 @@ interface ProxyConfig {
   failoverEnabled: boolean
   failoverProxy: string
   negativeCacheTtlMs: number
+  directFailoverTimeoutMs: number
 }
 
 /** Schema defaults mirrored from lib/index.js (reset target + base merge). */
@@ -92,6 +100,7 @@ const DEFAULTS: ProxyConfig = {
   failoverEnabled: true,
   failoverProxy: '',
   negativeCacheTtlMs: 60000,
+  directFailoverTimeoutMs: 30000,
 }
 
 /** Fields surfaced in the UI, in write order. */
@@ -105,6 +114,7 @@ const UI_FIELDS = [
   'failoverEnabled',
   'failoverProxy',
   'negativeCacheTtlMs',
+  'directFailoverTimeoutMs',
 ] as const
 
 /** The draft form state backing the manual-entry fields. */
@@ -118,6 +128,7 @@ interface FormState {
   failoverEnabled: boolean
   failoverProxy: string
   negativeCacheTtlMs: string
+  directFailoverTimeoutMs: string
 }
 
 /** JSON-compatible deep equality (the card values are plain JSON). */
@@ -137,6 +148,7 @@ function emptyForm(): FormState {
     failoverEnabled: DEFAULTS.failoverEnabled,
     failoverProxy: DEFAULTS.failoverProxy,
     negativeCacheTtlMs: String(DEFAULTS.negativeCacheTtlMs),
+    directFailoverTimeoutMs: String(DEFAULTS.directFailoverTimeoutMs),
   }
 }
 
@@ -152,6 +164,7 @@ function formFromConfig(value: ProxyConfig): FormState {
     failoverEnabled: value.failoverEnabled ?? DEFAULTS.failoverEnabled,
     failoverProxy: value.failoverProxy ?? DEFAULTS.failoverProxy,
     negativeCacheTtlMs: String(value.negativeCacheTtlMs ?? DEFAULTS.negativeCacheTtlMs),
+    directFailoverTimeoutMs: String(value.directFailoverTimeoutMs ?? DEFAULTS.directFailoverTimeoutMs),
   }
 }
 
@@ -167,6 +180,7 @@ function fieldFromForm(form: FormState, field: (typeof UI_FIELDS)[number]): unkn
     case 'failoverEnabled': return form.failoverEnabled === true
     case 'failoverProxy': return form.failoverProxy.trim()
     case 'negativeCacheTtlMs': return Number(form.negativeCacheTtlMs)
+    case 'directFailoverTimeoutMs': return Number(form.directFailoverTimeoutMs)
   }
 }
 
@@ -217,6 +231,7 @@ function mergeDefaults(base: Partial<ProxyConfig> | undefined): ProxyConfig {
     failoverEnabled: base?.failoverEnabled ?? DEFAULTS.failoverEnabled,
     failoverProxy: base?.failoverProxy ?? DEFAULTS.failoverProxy,
     negativeCacheTtlMs: base?.negativeCacheTtlMs ?? DEFAULTS.negativeCacheTtlMs,
+    directFailoverTimeoutMs: base?.directFailoverTimeoutMs ?? DEFAULTS.directFailoverTimeoutMs,
   }
 }
 
@@ -255,7 +270,7 @@ function TextField(props: {
 
 /** The card body: the configurable items form plus the save/reset footer. */
 function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
-  const { scope, useSnapshot, t } = props
+  const { scope, useSnapshot, t, modalityOwnedByHost } = props
   const snapshot = useSnapshot()
   const [form, setForm] = useState<FormState>(() => emptyForm())
   const [saving, setSaving] = useState(false)
@@ -482,6 +497,17 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
         )}
       </div>
 
+      {modalityOwnedByHost
+        ? (
+          // ≥ 0.1.7: DSH's own 模型列表 page owns `inputModalities`; this switch
+          // no longer reaches anything (the host mirror stands down), so it is
+          // replaced by a pointer to the control that does work.
+          <div className={styles.field} data-testid="multimodal-owned-hint">
+            <span className={styles.fieldLabel}>{t('fieldMultimodalModels')}</span>
+            <span className={styles.fieldHint}>{t('multimodalOwnedHint')}</span>
+          </div>
+        )
+        : (
       <div className={styles.field}>
         <span className={styles.fieldLabel}>{t('fieldMultimodalModels')}</span>
         <span className={styles.fieldHint}>{t('fieldMultimodalModelsHint')}</span>
@@ -528,6 +554,7 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
             ))}
         </select>
       </div>
+        )}
 
       <div className={styles.fieldRow}>
         <TextField
@@ -591,6 +618,21 @@ function CardBody(props: Required<ProxyModelCardInjected>): ReactNode {
             onChange={(value) => { setSaved(false); setForm({ ...form, negativeCacheTtlMs: value }) }}
           />
         </div>
+      </div>
+
+      <div className={styles.fieldRow}>
+        <TextField
+          label={t('fieldDirectFailoverTimeoutMs')}
+          hint={t('fieldDirectFailoverTimeoutMsHint')}
+          value={form.directFailoverTimeoutMs}
+          placeholder={String(DEFAULTS.directFailoverTimeoutMs)}
+          testId="field-direct-failover-timeout"
+          type="number"
+          min={0}
+          max={600000}
+          step={1000}
+          onChange={(value) => { setSaved(false); setForm({ ...form, directFailoverTimeoutMs: value }) }}
+        />
       </div>
 
       <div className={styles.footer}>
@@ -672,7 +714,14 @@ export function ProxyModelCard(props: ProxyModelCardProps): ReactNode {
         </span>
         <ChevronDown className={styles.chevron + (open ? ` ${styles.chevronOpen}` : '')} />
       </button>
-      {open && <CardBody scope={scope} useSnapshot={useSnapshot} t={t} />}
+      {open && (
+        <CardBody
+          scope={scope}
+          useSnapshot={useSnapshot}
+          t={t}
+          modalityOwnedByHost={props.modalityOwnedByHost}
+        />
+      )}
     </li>
   )
 }

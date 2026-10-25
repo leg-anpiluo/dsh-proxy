@@ -19,6 +19,10 @@ const checks = {
   // stay inline (no <li>), so the bundle has to branch on the render subject.
   'summary view handled': s.includes('"summary"') && s.includes('proxy-model-summary'),
   'summary copy present': s.includes('个模型走代理'),
+  // ≥ 0.1.7: DSH owns model input modalities → the switch is replaced by a hint.
+  'modality-owned hint': s.includes('multimodal-owned-hint'),
+  'direct failover deadline field': s.includes('field-direct-failover-timeout'),
+  'directFailoverTimeoutMs wired': s.includes('directFailoverTimeoutMs'),
   // The settings document is bound from the slot callback, not during apply().
   'scope bound lazily': /bound\s*\?\?=/.test(s) || s.includes('??='),
 }

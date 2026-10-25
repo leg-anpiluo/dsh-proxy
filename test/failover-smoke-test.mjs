@@ -63,7 +63,7 @@ const directPort = await listen(directServer, '127.0.0.2')
 const undici = await import('undici')
 
 /** Build the exact stack lib/index.js installs (RetryAgent → failover → router). */
-function makeStack({ failoverEnabled = true, negativeCacheTtlMs = 1500 } = {}) {
+function makeStack({ failoverEnabled = true, negativeCacheTtlMs = 1500, directFailoverTimeoutMs = 30000 } = {}) {
   const router = new RoutingDispatcher({
     undici,
     proxyHost: '127.0.0.1',
@@ -77,6 +77,7 @@ function makeStack({ failoverEnabled = true, negativeCacheTtlMs = 1500 } = {}) {
     failoverEnabled,
     failoverProxy: '',
     negativeCacheTtlMs,
+    directFailoverTimeoutMs,
     logger: quiet,
   })
   return new RetryAgent(failover, {
@@ -176,6 +177,22 @@ try {
   check(`stream body request never touched the proxy (outcome: ${streamOutcome})`, proxyHits.length === proxyBefore5)
   await stack.destroy()
   stack = undefined
+
+  // --- 6. Blackholed direct route (accepts, never answers) ---------------------
+  // The commonest real-world "direct is broken" shape: TCP connects, nothing
+  // ever comes back. undici would sit on its 300 s headers timeout, so the
+  // direct-attempt deadline is what makes failover prompt.
+  const blackhole = createServer(() => { /* hold the socket open, send nothing */ })
+  const blackholePort = await listen(blackhole, '127.0.0.2')
+  const proxyBefore6 = proxyHits.length
+  stack = makeStack({ directFailoverTimeoutMs: 300 })
+  const r7 = await request(`http://127.0.0.2:${blackholePort}/stalled`, { dispatcher: stack })
+  const b7 = await r7.body.text()
+  check('blackholed direct fails over at the deadline', r7.statusCode === 200 && b7.startsWith('via-proxy:'))
+  check('exactly one fallback reached the proxy', proxyHits.length === proxyBefore6 + 1)
+  await stack.destroy()
+  stack = undefined
+  blackhole.close()
 
   console.log(failures === 0 ? '\nAll failover smoke checks passed.' : `\n${failures} check(s) FAILED`)
   process.exitCode = failures === 0 ? 0 : 1

@@ -4,3 +4,7 @@ restart.log
 restart-dsh-web.ps1
 .DS_Store
 *.tgz
+
+# local scratch: DSH installs / throwaway probes / npm cache redirected here
+.chk/
+.nc/

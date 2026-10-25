@@ -68,6 +68,7 @@ dsh plugin --profile web add C:/path/to/dsh-llm-proxy
 | `failoverEnabled` | `true` | 直连失败自动回退：非代理目标的直连传输层失败时经代理重发一次 |
 | `failoverProxy` | `''`（复用主代理） | 专用回退端点，`http://` / `https://` / `socks5://` URL |
 | `negativeCacheTtlMs` | `60000` | 回退成功后该地址跳过直连的时长（ms），`0` 关闭缓存 |
+| `directFailoverTimeoutMs` | `30000` | 直连多久没收到响应头就改走代理（仅 GET/HEAD；0 关闭，走 undici 默认 5 分钟）。黑洞路由靠它才能及时回退；慢速 POST 不受影响 |
 | `trustedOrigins` | `[]` | 反向代理部署时额外信任的公网 origin（如 `https://dsh.example.com`）。默认只信本机；填写后公网域名可达设置桥，但仍强制同源校验（跨站页面拿不到数据） |
 
 ## 验证

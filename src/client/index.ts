@@ -89,7 +89,14 @@ export function apply(ctx: ClientContext): void {
   // Registration-time copy and the inject face share one bound translate;
   // copy freshness rides the locale revision.
   const t = ctx.locale.bind(NS) as ProxyModelCardInjected['t']
-  const injected = (): ProxyModelCardInjected => ({ scope: resolveScope(), useSnapshot, t })
+  const injected = (): ProxyModelCardInjected => ({
+    scope: resolveScope(),
+    useSnapshot,
+    t,
+    // ≥ 0.1.7: the official 模型列表 page owns input modalities, so the
+    // card hides the (inert) multimodal switch and says why.
+    modalityOwnedByHost: binder.officialDocument,
+  })
 
   // dsh ≤ 0.1.6: keyed slot. The key is the registered settings NAMESPACE
   // (`llm-proxy`), which is deliberately not the Loader entry id — rc.7
